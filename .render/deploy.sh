@@ -8,4 +8,4 @@ echo "Installing requirements..."
 pip install -r requirements.txt
 
 echo "Starting Vishal Music Bot..."
-python main.py
+python3 -m VISHALMUSIC
