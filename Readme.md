@@ -1,6 +1,3 @@
-
-
-
 🎵✨ VAISHALI X MUSIC ✨🎵
 
 <!-- ANIMATED HEADER -->
@@ -9,37 +6,16 @@
   <img src="https://user-images.githubusercontent.com/73097560/115834477-dbab4500-a447-11eb-908a-139a6edaec5c.gif" />
 </p>
 
-<!-- MAIN IMAGE BANNER WITH LIVE RGB GLOW -->
+<!-- MAIN IMAGE BANNER -->
 
 <div align="center">
   <div style="position: relative; border: 4px solid transparent; border-radius: 25px; background: linear-gradient(45deg, #FF1493, #00BFFF, #FFD700, #FF1493); background-size: 400% 400%; animation: gradient 8s ease infinite; padding: 4px; margin: 20px 0;">
     <div style="background: #000; border-radius: 20px; padding: 15px; position: relative;">
-      <!-- LIVE GLOW EFFECT ON IMAGE -->
-      <img src="https://files.catbox.moe/h9dan0.jpg" width="700" style="border-radius: 15px; box-shadow: 0 0 50px rgba(255, 20, 147, 0.8), 0 0 30px #00BFFF, 0 0 60px #FFD700; animation: borderPulse 2s infinite;" alt="Vaishali X Music Banner" />
+      <!-- MAIN IMAGE -->
+      <img src="https://files.catbox.moe/h9dan0.jpg" width="700" style="border-radius: 15px; box-shadow: 0 0 50px rgba(255, 20, 147, 0.5);" alt="Vaishali X Music Banner" />
     </div>
   </div>
 </div>
-
-<style>
-@keyframes gradient {
-  0% { background-position: 0% 50%; }
-  50% { background-position: 100% 50%; }
-  100% { background-position: 0% 50%; }
-}
-@keyframes borderPulse {
-  0% { box-shadow: 0 0 20px rgba(255, 20, 147, 0.5), 0 0 40px #00BFFF, 0 0 60px #FFD700; }
-  50% { box-shadow: 0 0 50px rgba(255, 20, 147, 0.9), 0 0 70px #00BFFF, 0 0 100px #FFD700; }
-  100% { box-shadow: 0 0 20px rgba(255, 20, 147, 0.5), 0 0 40px #00BFFF, 0 0 60px #FFD700; }
-}
-@keyframes slideIn {
-  from { transform: translateX(-100%); opacity: 0; }
-  to { transform: translateX(0); opacity: 1; }
-}
-@keyframes fadeInUp {
-  from { transform: translateY(20px); opacity: 0; }
-  to { transform: translateY(0); opacity: 1; }
-}
-</style>
 
 <!-- ANIMATED TITLE -->
 
@@ -47,7 +23,7 @@
   <img src="https://readme-typing-svg.herokuapp.com?font=Fira+Code&weight=800&size=35&duration=4000&pause=1000&color=FF1493&center=true&vCenter=true&width=700&height=60&lines=🎶+VAISHALI+X+MUSIC+✨;🔥+PREMIUM+TELEGRAM+MUSIC+BOT;🚀+ULTIMATE+STREAMING+EXPERIENCE+🎵" alt="Animated Title" />
 </h1>
 
-<!-- DEVELOPER INTRO WITH LIVE GRADIENT -->
+<!-- DEVELOPER INTRO -->
 
 <div align="center" style="background: linear-gradient(90deg, #FF1493, #00BFFF, #FFD700); padding: 3px; border-radius: 50px; margin: 20px 0;">
   <div style="background: #000; padding: 15px; border-radius: 45px;">
@@ -55,36 +31,28 @@
   </div>
 </div>
 
-<!-- ANIMATED STATS SECTION -->
+<!-- REAL-TIME STATS -->
 
 <div align="center">
-  <div style="animation: fadeInUp 1s ease-out;">
-    <table>
-      <tr>
-        <td align="center">
-          <div style="transition: transform 0.3s;">
-            <a href="https://github.com/ItsMeVishal0/VishalMusic/stargazers">
-              <img src="https://img.shields.io/github/stars/ItsMeVishal0/VishalMusic?style=for-the-badge&logo=github&logoColor=white&color=FFD700&label=STARS" style="transition: 0.3s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" />
-            </a>
-          </div>
-        </td>
-        <td align="center">
-          <div style="transition: transform 0.3s;">
-            <a href="https://github.com/ItsMeVishal0/VishalMusic/network/members">
-              <img src="https://img.shields.io/github/forks/ItsMeVishal0/VishalMusic?style=for-the-badge&logo=git&logoColor=white&color=00FF00&label=FORKS" style="transition: 0.3s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" />
-            </a>
-          </div>
-        </td>
-        <td align="center">
-          <div style="transition: transform 0.3s;">
-            <a href="https://komarev.com/ghpvc/?username=ItsMeVishal0">
-              <img src="https://img.shields.io/badge/👁️_VIEWS-8A2BE2?style=for-the-badge&logo=eyeem&logoColor=white" style="transition: 0.3s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'" />
-            </a>
-          </div>
-        </td>
-      </tr>
-    </table>
-  </div>
+  <table>
+    <tr>
+      <td align="center">
+        <a href="https://github.com/ItsMeVishal0/VishalMusic/stargazers">
+          <img src="https://img.shields.io/github/stars/ItsMeVishal0/VishalMusic?style=for-the-badge&logo=github&logoColor=white&color=FFD700&label=STARS" />
+        </a>
+      </td>
+      <td align="center">
+        <a href="https://github.com/ItsMeVishal0/VishalMusic/network/members">
+          <img src="https://img.shields.io/github/forks/ItsMeVishal0/VishalMusic?style=for-the-badge&logo=git&logoColor=white&color=00FF00&label=FORKS" />
+        </a>
+      </td>
+      <td align="center">
+        <a href="https://komarev.com/ghpvc/?username=ItsMeVishal0">
+          <img src="https://img.shields.io/badge/👁️_VIEWS-8A2BE2?style=for-the-badge&logo=eyeem&logoColor=white" />
+        </a>
+      </td>
+    </tr>
+  </table>
 </div>
 
 ---
@@ -92,23 +60,19 @@
 🌟 PREMIUM FEATURES UNLEASHED
 
 <div align="center">
-  <div style="animation: slideIn 0.8s ease-out;">
-    <table>
-      <tr>
-        <td width="50%" valign="top" style="background: rgba(0,0,0,0.7); border-radius: 20px; padding: 20px;">
-          <h3 style="color: #FFD700;">🚀 ADVANCED PERFORMANCE</h3>
-          <ul style="list-style: none; padding-left: 0; text-align: left;">
-            <li>⚡ Lightning Fast Responses</li>
-            <li>👮 Auto Group Management</li>
-            <li>🎧 Lag-Free HD Streaming</li>
-            <li>🔥 High Definition Sound</li>
-            <li>⚡ Instant Playback Start</li>
-            <li>🤖 24/7 Active Availability</li>
-          </ul>
-        </td>
-      </tr>
-    </table>
-  </div>
+  <table>
+    <tr>
+      <td width="50%" valign="top">
+
+🚀 ADVANCED PERFORMANCE
+
+· ⚡ Lightning Fast Responses
+· 👮 Auto Group Management
+· 🎧 Lag-Free HD Streaming
+· 🔥 High Definition Sound
+· ⚡ Instant Playback Start
+· 🤖 24/7 Active Availability
+  
 </div>
 
 ---
@@ -117,7 +81,7 @@
 
 🔐 ESSENTIAL CREDENTIALS REQUIRED
 
-```bash
+```env
 # ========== REQUIRED VARIABLES ==========
 API_ID=your_telegram_api_id           # From https://my.telegram.org
 API_HASH=your_telegram_api_hash       # From https://my.telegram.org
@@ -135,7 +99,7 @@ API_URL=external_api_url            # External service endpoint
 ```
 
 <details>
-<summary><b>📖 DETAILED CONFIGURATION GUIDE (Click Me)</b></summary>
+<summary><b>📖 DETAILED CONFIGURATION GUIDE</b></summary>
 
 <br>
 
@@ -153,25 +117,31 @@ COOKIE_URL Secure Paste Service Export YouTube cookies → Upload to paste servi
 
 🚀 DEPLOYMENT METHODS
 
+<!-- DEPLOYMENT OPTIONS GRID -->
+
 <div align="center">
-  <div style="display: flex; gap: 20px; justify-content: center; flex-wrap: wrap;">
-    <div style="transition: transform 0.3s; animation: fadeInUp 1s ease-out;">
-      <a href="http://dashboard.heroku.com/new?template=https://github.com/ItsMeVishal0/VishalMusic">
-        <img src="https://img.shields.io/badge/🚀_HEROKU_DEPLOY-430098?style=for-the-badge&logo=heroku&logoColor=white&labelColor=000000" width="250" style="transition: 0.3s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"/>
-      </a>
-      <br><sub>One-Click Cloud Deployment</sub>
-    </div>
-    <div style="transition: transform 0.3s; animation: fadeInUp 1.2s ease-out;">
-      <a href="https://t.me/SessionBuilderbot">
-        <img src="https://img.shields.io/badge/🔑_SESSION_BUILDER-0088cc?style=for-the-badge&logo=telegram&logoColor=white&labelColor=000000" width="250" style="transition: 0.3s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"/>
-      </a>
-      <br><sub>Generate Pyrogram Session</sub>
-    </div>
-  </div>
+  <table>
+    <tr>
+      <td align="center">
+        <a href="http://dashboard.heroku.com/new?template=https://github.com/ItsMeVishal0/VishalMusic">
+          <img src="https://img.shields.io/badge/🚀_HEROKU_DEPLOY-430098?style=for-the-badge&logo=heroku&logoColor=white&labelColor=000000" width="250"/>
+        </a>
+        <br>
+        <sub>One-Click Cloud Deployment</sub>
+      </td>
+      <td align="center">
+        <a href="https://t.me/SessionBuilderbot">
+          <img src="https://img.shields.io/badge/🔑_SESSION_BUILDER-0088cc?style=for-the-badge&logo=telegram&logoColor=white&labelColor=000000" width="250"/>
+        </a>
+        <br>
+        <sub>Generate Pyrogram Session</sub>
+      </td>
+    </tr>
+  </table>
 </div>
 
 <details>
-<summary><b>🐳 DOCKER DEPLOYMENT (Click Me)</b></summary>
+<summary><b>🐳 DOCKER DEPLOYMENT</b></summary>
 
 ```bash
 # Step 1: Clone Repository
@@ -198,7 +168,7 @@ docker restart vaishali-bot        # Restart container
 </details>
 
 <details>
-<summary><b>💻 VPS DEPLOYMENT (Click Me)</b></summary>
+<summary><b>💻 VPS DEPLOYMENT</b></summary>
 
 ```bash
 # System Preparation
@@ -240,28 +210,32 @@ tmux kill-session -t vaishali-music  # Terminate session
 📞 SUPPORT & COMMUNITY
 
 <div align="center">
-  <div style="display: flex; gap: 20px; justify-content: center; flex-wrap: wrap;">
-    <div style="transition: transform 0.3s;">
-      <a href="https://t.me/ItsMeVishalSupport">
-        <img src="https://img.shields.io/badge/💬_SUPPORT_GROUP-0088cc?style=for-the-badge&logo=telegram&logoColor=white&labelColor=000000" width="220" style="transition: 0.3s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"/>
-      </a>
-    </div>
-    <div style="transition: transform 0.3s;">
-      <a href="https://t.me/ItsMeVishalBots">
-        <img src="https://img.shields.io/badge/📢_UPDATES_CHANNEL-6A5ACD?style=for-the-badge&logo=telegram&logoColor=white&labelColor=000000" width="220" style="transition: 0.3s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"/>
-      </a>
-    </div>
-    <div style="transition: transform 0.3s;">
-      <a href="https://t.me/Its_me_Vishall">
-        <img src="https://img.shields.io/badge/👨‍💻_CONTACT_OWNER-4CAF50?style=for-the-badge&logo=telegram&logoColor=white&labelColor=000000" width="220" style="transition: 0.3s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"/>
-      </a>
-    </div>
-    <div style="transition: transform 0.3s;">
-      <a href="https://t.me/VaishalixMusic_Robot">
-        <img src="https://img.shields.io/badge/🤖_TRY_BOT_NOW-FF69B4?style=for-the-badge&logo=telegram&logoColor=white&labelColor=000000" width="220" style="transition: 0.3s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"/>
-      </a>
-    </div>
-  </div>
+  <table>
+    <tr>
+      <td align="center">
+        <a href="https://t.me/ItsMeVishalSupport">
+          <img src="https://img.shields.io/badge/💬_SUPPORT_GROUP-0088cc?style=for-the-badge&logo=telegram&logoColor=white&labelColor=000000" width="220"/>
+        </a>
+      </td>
+      <td align="center">
+        <a href="https://t.me/ItsMeVishalBots">
+          <img src="https://img.shields.io/badge/📢_UPDATES_CHANNEL-6A5ACD?style=for-the-badge&logo=telegram&logoColor=white&labelColor=000000" width="220"/>
+        </a>
+      </td>
+    </tr>
+    <tr>
+      <td align="center">
+        <a href="https://t.me/Its_me_Vishall">
+          <img src="https://img.shields.io/badge/👨‍💻_CONTACT_OWNER-4CAF50?style=for-the-badge&logo=telegram&logoColor=white&labelColor=000000" width="220"/>
+        </a>
+      </td>
+      <td align="center">
+        <a href="https://t.me/VaishalixMusic_Robot">
+          <img src="https://img.shields.io/badge/🤖_TRY_BOT_NOW-FF69B4?style=for-the-badge&logo=telegram&logoColor=white&labelColor=000000" width="220"/>
+        </a>
+      </td>
+    </tr>
+  </table>
 </div>
 
 ---
@@ -269,23 +243,33 @@ tmux kill-session -t vaishali-music  # Terminate session
 💫 TECHNICAL EXCELLENCE
 
 <div align="center">
-  <div style="animation: fadeInUp 1s ease-out;">
-    <table>
-      <tr>
-        <td align="center" style="padding: 10px;"><img src="https://img.shields.io/badge/🔧_PYROGRAM_FRAMEWORK-00BFFF?style=for-the-badge&logo=python&logoColor=white" /></td>
-        <td align="center" style="padding: 10px;"><img src="https://img.shields.io/badge/🎵_PYTGCALLS_AUDIO-FF1493?style=for-the-badge&logo=telegram&logoColor=white" /></td>
-        <td align="center" style="padding: 10px;"><img src="https://img.shields.io/badge/💾_MONGODB_DATABASE-00FF00?style=for-the-badge&logo=mongodb&logoColor=white" /></td>
-      </tr>
-      <tr>
-        <td align="center" style="padding: 10px;"><img src="https://img.shields.io/badge/⚡_ASYNCIO_ASYNC-FFD700?style=for-the-badge&logo=python&logoColor=black" /></td>
-        <td align="center" style="padding: 10px;"><img src="https://img.shields.io/badge/🔒_SECURE_AUTH-8A2BE2?style=for-the-badge&logo=security&logoColor=white" /></td>
-        <td align="center" style="padding: 10px;"><img src="https://img.shields.io/badge/🚀_HIGH_PERFORMANCE-FF69B4?style=for-the-badge&logo=rocket&logoColor=white" /></td>
-      </tr>
-    </table>
-  </div>
+  <table>
+    <tr>
+      <td align="center">
+        <img src="https://img.shields.io/badge/🔧_PYROGRAM_FRAMEWORK-00BFFF?style=for-the-badge&logo=python&logoColor=white" />
+      </td>
+      <td align="center">
+        <img src="https://img.shields.io/badge/🎵_PYTGCALLS_AUDIO-FF1493?style=for-the-badge&logo=telegram&logoColor=white" />
+      </td>
+      <td align="center">
+        <img src="https://img.shields.io/badge/💾_MONGODB_DATABASE-00FF00?style=for-the-badge&logo=mongodb&logoColor=white" />
+      </td>
+    </tr>
+    <tr>
+      <td align="center">
+        <img src="https://img.shields.io/badge/⚡_ASYNCIO_ASYNC-FFD700?style=for-the-badge&logo=python&logoColor=black" />
+      </td>
+      <td align="center">
+        <img src="https://img.shields.io/badge/🔒_SECURE_AUTH-8A2BE2?style=for-the-badge&logo=security&logoColor=white" />
+      </td>
+      <td align="center">
+        <img src="https://img.shields.io/badge/🚀_HIGH_PERFORMANCE-FF69B4?style=for-the-badge&logo=rocket&logoColor=white" />
+      </td>
+    </tr>
+  </table>
 </div>
 
-<!-- CLOSING MESSAGE WITH LIVE TYPING EFFECT -->
+<!-- CLOSING MESSAGE -->
 
 <div align="center" style="margin: 30px 0;">
   <div style="background: linear-gradient(90deg, #FF1493, #00BFFF, #FFD700); padding: 3px; border-radius: 20px;">
