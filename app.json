@@ -39,7 +39,7 @@
     "STRING_SESSION": {
       "description": "Pyrogram v2 session string. Generate it securely from https://telegram.tools/session-string-generator#pyrogram.",
       "value": "",
-      "required": true
+      "required": true 
     },
     "LOGGER_ID": {
       "description": "Chat ID of your log group where the bot sends important logs. Make sure the bot is admin in that group.",
