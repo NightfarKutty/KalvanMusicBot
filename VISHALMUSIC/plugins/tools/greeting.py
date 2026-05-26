@@ -2,359 +2,294 @@ import os
 import io
 import re
 import random
-import math
 import asyncio
 import datetime
 import html
 from zoneinfo import ZoneInfo
 from typing import List
-from PIL import Image, ImageDraw, ImageFont
-from pyrogram import filters
-from pyrogram.types import Message, InlineKeyboardButton, InlineKeyboardMarkup
-from pyrogram.enums import ParseMode
+
+from pyrogram import filters, enums
+from pyrogram.types import (
+    Message,
+    InlineKeyboardButton,
+    InlineKeyboardMarkup
+)
+
+from PIL import (
+    Image,
+    ImageDraw,
+    ImageFont,
+    ImageFilter
+)
 
 from VISHALMUSIC import app
 
-# ============ CONFIGURATION ============
+# =========================================================
+# CONFIG
+# =========================================================
+
 TIMEZONE = os.environ.get("TIMEZONE", "Asia/Kolkata")
-FONT_PATH = os.environ.get("FONT_PATH", "")
-ALLOW_OUT_OF_TIME_REPLY = os.environ.get("ALLOW_OUT_OF_TIME_REPLY", "false").lower() == "true"
 
-# ============ GREETING PATTERNS ============
-GOODNIGHT_RE = re.compile(r"\b(good\s*night|goodnight|gn|nighty|nite|g night|gud night)\b", re.IGNORECASE)
-GOODMORNING_RE = re.compile(r"\b(good\s*morning|goodmorning|gm|morning|subah|gud morning|g morning)\b", re.IGNORECASE)
+FONT_PATH = os.environ.get(
+    "FONT_PATH",
+    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+)
 
-# ============ TIME CHECK FUNCTIONS ============
-def is_good_morning(dt_local) -> bool:
+ALLOW_OUT_OF_TIME_REPLY = bool(
+    os.environ.get("ALLOW_OUT_OF_TIME_REPLY", "").strip()
+)
+
+# =========================================================
+# RANDOM TEXTS
+# =========================================================
+
+GOOD_MORNING_LINES = [
+    ["☀️ ɢᴏᴏᴅ ᴍᴏʀɴɪɴɢ ☀️", "ʜᴀᴠᴇ ᴀ ʙᴇᴀᴜᴛɪғᴜʟ ᴅᴀʏ"],
+    ["🌤️ ʀɪsᴇ ᴀɴᴅ sʜɪɴᴇ 🌤️", "sᴍɪʟᴇ ᴀɴᴅ sᴛᴀʏ ʜᴀᴘᴘʏ"],
+    ["🌸 ɢᴏᴏᴅ ᴍᴏʀɴɪɴɢ 🌸", "ɴᴇᴡ ᴅᴀʏ ɴᴇᴡ ʜᴏᴘᴇ"],
+    ["✨ ᴍᴏʀɴɪɴɢ ᴠɪʙᴇs ✨", "ᴇɴᴊᴏʏ ᴛʜᴇ ᴅᴀʏ"],
+    ["☕ ɢᴏᴏᴅ ᴍᴏʀɴɪɴɢ ☕", "sᴛᴀʏ ᴘᴏsɪᴛɪᴠᴇ"]
+]
+
+GOOD_NIGHT_LINES = [
+    ["🌙 ɢᴏᴏᴅ ɴɪɢʜᴛ 🌙", "sᴡᴇᴇᴛ ᴅʀᴇᴀᴍs"],
+    ["✨ ɴɪɢʜᴛ ᴠɪʙᴇs ✨", "sʟᴇᴇᴘ ᴘᴇᴀᴄᴇғᴜʟʟʏ"],
+    ["🌌 ɢᴏᴏᴅ ɴɪɢʜᴛ 🌌", "ʀᴇsᴛ ᴡᴇʟʟ"],
+    ["💫 sᴡᴇᴇᴛ ᴅʀᴇᴀᴍs 💫", "ʜᴀᴠᴇ ᴀ ɢᴏᴏᴅ sʟᴇᴇᴘ"],
+    ["🌃 ɴɪɢʜᴛ ɴɪɢʜᴛ 🌃", "ᴛᴀᴋᴇ ᴄᴀʀᴇ"]
+]
+
+# =========================================================
+# GREETING DETECTORS
+# =========================================================
+
+GOODNIGHT_RE = re.compile(
+    r"\b(good\s*night|goodnight|gn|nighty|nite)\b",
+    re.IGNORECASE
+)
+
+GOODMORNING_RE = re.compile(
+    r"\b(good\s*morning|goodmorning|gm|morning|subah)\b",
+    re.IGNORECASE
+)
+
+# =========================================================
+# TIME CHECK
+# =========================================================
+
+def is_good_morning(dt_local):
     return 4 <= dt_local.hour < 12
 
-def is_good_night(dt_local) -> bool:
+def is_good_night(dt_local):
     return dt_local.hour >= 20 or dt_local.hour < 4
 
-# ============ SPECIAL THUMBNAIL GENERATOR ============
-def generate_thumbnail(lines: List[str], username: str = "", width: int = 1280, height: int = 720) -> bytes:
-    try:
-        # Create base image
-        img = Image.new("RGB", (width, height))
-        draw = ImageDraw.Draw(img)
-        
-        # Check if it's night or morning theme
-        is_night = "goodnight" in str(lines).lower()
-        
-        # Beautiful gradient background
-        if is_night:
-            # Night theme - deep blue to purple
-            colors = [(10, 20, 50), (40, 20, 70), (80, 30, 100)]
-        else:
-            # Morning theme - orange to yellow
-            colors = [(255, 120, 50), (255, 180, 70), (255, 220, 100)]
-        
-        # Create smooth gradient
-        for y in range(height):
-            ratio = y / (height - 1)
-            if ratio < 0.5:
-                r = int(colors[0][0] * (1 - ratio*2) + colors[1][0] * (ratio*2))
-                g = int(colors[0][1] * (1 - ratio*2) + colors[1][1] * (ratio*2))
-                b = int(colors[0][2] * (1 - ratio*2) + colors[1][2] * (ratio*2))
-            else:
-                r2 = (ratio - 0.5) * 2
-                r = int(colors[1][0] * (1 - r2) + colors[2][0] * r2)
-                g = int(colors[1][1] * (1 - r2) + colors[2][1] * r2)
-                b = int(colors[1][2] * (1 - r2) + colors[2][2] * r2)
-            draw.line([(0, y), (width, y)], fill=(r, g, b))
-        
-        # Add stars for night theme
-        if is_night:
-            random.seed(42)
-            for _ in range(150):
-                x = random.randint(0, width)
-                y = random.randint(0, height // 2)
-                size = random.randint(1, 3)
-                brightness = random.randint(150, 255)
-                draw.ellipse([(x, y), (x + size, y + size)], fill=(brightness, brightness, brightness))
-        
-        # Decorative border
-        border_color = (255, 215, 0) if not is_night else (100, 150, 255)
-        for i in range(5):
-            draw.rectangle([(i, i), (width - i, height - i)], outline=border_color, width=2)
-        
-        # Main content box
-        box_margin = 80
-        box = [box_margin, box_margin, width - box_margin, height - box_margin]
-        draw.rectangle(box, outline=border_color, width=3)
-        draw.rectangle([box[0]+5, box[1]+5, box[2]-5, box[3]-5], outline=border_color, width=1)
-        
-        # Load fonts
-        def load_font(size: int):
-            try:
-                if FONT_PATH and os.path.exists(FONT_PATH):
-                    return ImageFont.truetype(FONT_PATH, size)
-                
-                font_options = [
-                    "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-                    "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-                    "/System/Library/Fonts/Helvetica.ttc",
-                    "C:\\Windows\\Fonts\\Arial.ttf"
-                ]
-                
-                for font_path in font_options:
-                    if os.path.exists(font_path):
-                        return ImageFont.truetype(font_path, size)
-            except Exception:
-                pass
-            return ImageFont.load_default()
-        
-        # Draw main content
-        title_font = load_font(96)
-        sub_font = load_font(52)
-        small_font = load_font(36)
-        
-        center_x = width // 2
-        
-        # Calculate text positions
-        line_data = []
-        total_height = 0
-        
-        for i, line in enumerate(lines):
-            font = title_font if i == 0 else sub_font
-            bbox = draw.textbbox((0, 0), line, font=font)
-            w = bbox[2] - bbox[0]
-            h = bbox[3] - bbox[1]
-            line_data.append((line, font, w, h))
-            total_height += h + 30
-        
-        start_y = (height - total_height) // 2
-        current_y = start_y
-        
-        # Draw text
-        for idx, (line, font, w, h) in enumerate(line_data):
-            x = center_x - w // 2
-            
-            # Shadow effect
-            draw.text((x + 3, current_y + 3), line, font=font, fill=(0, 0, 0))
-            
-            # Main text color
-            if idx == 0:
-                text_color = (150, 200, 255) if is_night else (255, 220, 100)
-            else:
-                text_color = (255, 240, 180)
-            
-            draw.text((x, current_y), line, font=font, fill=text_color)
-            current_y += h + 30
-        
-        # Draw username
-        if username:
-            user_text = f"✨ {username} ✨"
-            bbox = draw.textbbox((0, 0), user_text, font=small_font)
-            w = bbox[2] - bbox[0]
-            h = bbox[3] - bbox[1]
-            draw.text((width - w - 50, height - h - 30), user_text, font=small_font, fill=(255, 215, 0))
-        
-        # Save image to bytes
-        output = io.BytesIO()
-        img.save(output, format="JPEG", quality=90)
-        output.seek(0)
-        return output.read()
-        
-    except Exception as e:
-        print(f"Image generation error: {e}")
-        # Return a simple error image
-        img = Image.new("RGB", (800, 400), color=(50, 50, 80))
-        draw = ImageDraw.Draw(img)
-        draw.text((100, 180), "✨ Good Night ✨", fill=(255, 255, 255))
-        output = io.BytesIO()
-        img.save(output, format="JPEG")
-        output.seek(0)
-        return output.read()
+# =========================================================
+# FONT
+# =========================================================
 
-# ============ SEND THUMBNAIL FUNCTION ============
-async def make_and_send_thumbnail(message: Message, lines: List[str], caption_text: str):
+def load_font(size):
     try:
-        # Get username
-        uname = ""
-        uid = None
+        if FONT_PATH and os.path.exists(FONT_PATH):
+            return ImageFont.truetype(FONT_PATH, size)
+    except Exception:
+        pass
+    return ImageFont.load_default()
+
+# =========================================================
+# RANDOM NATURE BACKGROUND
+# =========================================================
+
+def create_random_nature_background(width, height):
+    themes = [
+        ((135, 206, 235), (255, 183, 77)),   # sky sunrise
+        ((34, 139, 34), (144, 238, 144)),    # forest
+        ((25, 25, 112), (72, 61, 139)),      # night
+        ((70, 130, 180), (176, 224, 230)),   # ocean
+        ((255, 140, 0), (255, 215, 0)),      # sunset
+        ((46, 139, 87), (152, 251, 152))     # green land
+    ]
+
+    top, bottom = random.choice(themes)
+
+    img = Image.new("RGB", (width, height))
+    draw = ImageDraw.Draw(img)
+
+    # Gradient
+    for y in range(height):
+        ratio = y / height
+        r = int(top[0] * (1 - ratio) + bottom[0] * ratio)
+        g = int(top[1] * (1 - ratio) + bottom[1] * ratio)
+        b = int(top[2] * (1 - ratio) + bottom[2] * ratio)
+        draw.line([(0, y), (width, y)], fill=(r, g, b))
+
+    # Random circles for artistic look
+    for _ in range(40):
+        x = random.randint(0, width)
+        y = random.randint(0, height)
+        radius = random.randint(20, 120)
+        color = (
+            random.randint(150, 255),
+            random.randint(150, 255),
+            random.randint(150, 255)
+        )
+        draw.ellipse(
+            (x - radius, y - radius, x + radius, y + radius),
+            fill=color
+        )
+
+    img = img.filter(ImageFilter.GaussianBlur(18))
+    return img
+
+# =========================================================
+# IMAGE GENERATOR
+# =========================================================
+
+def generate_thumbnail(lines, username=""):
+    width = 1280
+    height = 720
+
+    img = create_random_nature_background(width, height)
+    overlay = Image.new("RGBA", (width, height), (0, 0, 0, 70))
+    img = Image.alpha_composite(img.convert("RGBA"), overlay)
+    draw = ImageDraw.Draw(img)
+
+    title_font = load_font(70)
+    sub_font = load_font(42)
+    small_font = load_font(30)
+
+    fonts = [title_font if i == 0 else sub_font for i in range(len(lines))]
+
+    total_height = 0
+    sizes = []
+
+    for i, line in enumerate(lines):
+        bbox = draw.textbbox((0, 0), line, font=fonts[i])
+        w = bbox[2] - bbox[0]
+        h = bbox[3] - bbox[1]
+        sizes.append((w, h))
+        total_height += h + 25
+
+    y = (height - total_height) // 2
+
+    for i, line in enumerate(lines):
+        w, h = sizes[i]
+        x = (width - w) // 2
+        # Shadow
+        draw.text((x + 4, y + 4), line, font=fonts[i], fill=(0, 0, 0))
+        # Main
+        draw.text((x, y), line, font=fonts[i], fill=(255, 255, 255))
+        y += h + 25
+
+    # Username
+    if username:
+        user_text = f"— {username}"
+        bbox = draw.textbbox((0, 0), user_text, font=small_font)
+        uw = bbox[2] - bbox[0]
+        uh = bbox[3] - bbox[1]
+        draw.text((width - uw - 40, height - uh - 30), user_text, font=small_font, fill=(255, 255, 255))
+
+    out = io.BytesIO()
+    img.convert("RGB").save(out, format="JPEG", quality=95)
+    out.seek(0)
+    return out.read()
+
+# =========================================================
+# SEND PHOTO
+# =========================================================
+
+async def make_and_send_thumbnail(message, lines, caption):
+    try:
+        uname = "User"
         if message.from_user:
-            uid = message.from_user.id
-            uname = message.from_user.first_name or ""
-            if message.from_user.last_name:
-                uname += " " + message.from_user.last_name
-        
-        if not uname.strip():
-            uname = "Dear User"
-        
-        # Generate image
+            uname = message.from_user.first_name or "User"
+
         img_bytes = await asyncio.to_thread(generate_thumbnail, lines, uname)
-        
-        # Create button
-        button = InlineKeyboardMarkup([[
-            InlineKeyboardButton("✨ Download ✨", url=f"https://t.me/{app.username if app.username else 'VISHALMUSIC'}")
-        ]])
-        
-        # Send photo
-        await message.reply_photo(
-            photo=img_bytes,
-            caption=caption_text,
-            reply_markup=button,
-            parse_mode=ParseMode.HTML
-        )
+        photo = io.BytesIO(img_bytes)
+        photo.name = "greeting.jpg"
+
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🌸 ᴊᴏɪɴ 🌸", url=f"https://t.me/{app.username or ''}")]
+        ])
+
+        await message.reply_photo(photo=photo, caption=caption, parse_mode=enums.ParseMode.HTML, reply_markup=kb)
     except Exception as e:
-        # Fallback text
-        safe_name = html.escape(uname if uname else "User")
-        await message.reply_text(
-            f"{caption_text}\n\n— {safe_name}\n\n(✨ Image generated successfully!)",
-            parse_mode=ParseMode.HTML
-        )
+        await message.reply_text(f"⚠️ Error:\n{e}")
 
-# ============ CAPTION BUILDER ============
-def build_caption_and_lines(kind: str, display_name_html: str):
-    if kind == "goodnight":
-        lines = ["❖ GOOD NIGHT ❖", "SWEET DREAMS"]
-        caption = (
-            "❖ ɢᴏᴏᴅ ɴɪɢʜᴛ ❖ sᴡᴇᴇᴛ ᴅʀᴇᴀᴍs\n\n"
-            f"❍   𐙚 ꒷꒦ ๋{display_name_html} ࣭ ꒷꒦ 🎟️ 💤\n\n"
-            "❖ ɢᴏ ᴛᴏ ➥ sʟᴇᴇᴘ ᴇᴀʀʟʏ"
-        )
-    else:
-        lines = ["☀️ GOOD MORNING ☀️", "HAVE A BRIGHT DAY"]
-        caption = (
-            "☀️ ɢᴏᴏᴅ ᴍᴏʀɴɪɴɢ ☀️\n\n"
-            f"❍   𐙚 ꒷꒦ ๋{display_name_html} ࣭ ꒷꒦ 🎟️ ☕\n\n"
-            "❖ ᴘʀᴀʏ ғᴏʀ ᴀ ɢᴏᴏᴅ ᴅᴀʏ"
-        )
-    return lines, caption
+# =========================================================
+# MAIN HANDLER - FIXED: Added proper filters and error handling
+# =========================================================
 
-# ============ MAIN HANDLER ============
-@app.on_message(filters.text & ~filters.command(["goodnight", "goodmorning", "gn", "gm"]))
+@app.on_message(filters.text & ~filters.command(["goodmorning", "goodnight"]))  # Don't trigger on commands
 async def greet_detector_handler(client, message: Message):
-    text = message.text or ""
-    
-    # Get local time
-    try:
-        msg_dt = message.date
-        if msg_dt.tzinfo is None:
-            msg_dt = msg_dt.replace(tzinfo=ZoneInfo("UTC"))
-        local_dt = msg_dt.astimezone(ZoneInfo(TIMEZONE))
-    except:
-        local_dt = datetime.datetime.now(ZoneInfo(TIMEZONE))
-    
-    is_gn = bool(GOODNIGHT_RE.search(text))
-    is_gm = bool(GOODMORNING_RE.search(text))
-    
-    # Handle both matches
-    if is_gn and is_gm:
-        if is_good_night(local_dt):
-            is_gm = False
-        else:
-            is_gn = False
-    
-    if not (is_gn or is_gm):
+    # Skip if message is from a channel or has no text
+    if not message.text or message.sender_chat:
         return
     
-    # Get user info
-    uname = ""
+    # Skip if message is a command
+    if message.text.startswith('/'):
+        return
+    
+    text = message.text or ""
+
+    try:
+        msg_dt = message.date
+        if msg_dt.tzinfo is None:
+            msg_dt = msg_dt.replace(tzinfo=datetime.timezone.utc)
+        local_dt = msg_dt.astimezone(ZoneInfo(TIMEZONE))
+    except Exception:
+        local_dt = datetime.datetime.now(ZoneInfo(TIMEZONE))
+
+    is_gn = bool(GOODNIGHT_RE.search(text))
+    is_gm = bool(GOODMORNING_RE.search(text))
+
+    # Skip if no greeting detected
+    if not is_gn and not is_gm:
+        return
+
+    uname = "User"
     uid = None
+
     if message.from_user:
         uid = message.from_user.id
-        uname = message.from_user.first_name or ""
-        if message.from_user.last_name:
-            uname += " " + message.from_user.last_name
-    
-    if not uname.strip():
-        uname = "User"
-    
-    # Create mention
+        uname = message.from_user.first_name or "User"
+
     if uid:
-        display_html = f"<a href='tg://user?id={uid}'>{html.escape(uname[:30])}</a>"
+        display_html = f"<a href='tg://user?id={uid}'>{html.escape(uname)}</a>"
     else:
         display_html = html.escape(uname)
-    
-    # Send response
-    if is_gn:
-        if is_good_night(local_dt) or ALLOW_OUT_OF_TIME_REPLY:
-            lines, caption = build_caption_and_lines("goodnight", display_html)
-            await make_and_send_thumbnail(message, lines, caption)
-        else:
-            await message.reply_text(
-                f"✨ {html.escape(uname)}, abhi raat ka time nahi hai, phir bhi - Good Night! 🌙",
-                parse_mode=ParseMode.HTML
-            )
-    elif is_gm:
+
+    # GOOD MORNING
+    if is_gm:
         if is_good_morning(local_dt) or ALLOW_OUT_OF_TIME_REPLY:
-            lines, caption = build_caption_and_lines("goodmorning", display_html)
+            lines = random.choice(GOOD_MORNING_LINES)
+            caption = f"{lines[0]}\n\n❍ 𐙚 ꒷꒦ ๋{display_html} ☕\n\n{lines[1]}"
             await make_and_send_thumbnail(message, lines, caption)
-        else:
-            await message.reply_text(
-                f"🌤️ {html.escape(uname)}, abhi subah ka time nahi hai, phir bhi - Good Morning!",
-                parse_mode=ParseMode.HTML
-            )
 
-# ============ COMMAND HANDLERS ============
-@app.on_message(filters.command(["goodnight", "gn"]))
-async def cmd_goodnight(client, message: Message):
-    try:
-        msg_dt = message.date
-        if msg_dt.tzinfo is None:
-            msg_dt = msg_dt.replace(tzinfo=ZoneInfo("UTC"))
-        local_dt = msg_dt.astimezone(ZoneInfo(TIMEZONE))
-    except:
-        local_dt = datetime.datetime.now(ZoneInfo(TIMEZONE))
-    
-    uname = ""
-    uid = None
-    if message.from_user:
-        uid = message.from_user.id
-        uname = message.from_user.first_name or ""
-        if message.from_user.last_name:
-            uname += " " + message.from_user.last_name
-    
-    if not uname.strip():
-        uname = "User"
-    
-    if uid:
-        display_html = f"<a href='tg://user?id={uid}'>{html.escape(uname[:30])}</a>"
-    else:
-        display_html = html.escape(uname)
-    
-    if is_good_night(local_dt) or ALLOW_OUT_OF_TIME_REPLY:
-        lines, caption = build_caption_and_lines("goodnight", display_html)
-        await make_and_send_thumbnail(message, lines, caption)
-    else:
-        await message.reply_text(
-            f"{html.escape(uname)}, abhi night time nahi hai. Still, send /goodnight",
-            parse_mode=ParseMode.HTML
-        )
+    # GOOD NIGHT
+    elif is_gn:
+        if is_good_night(local_dt) or ALLOW_OUT_OF_TIME_REPLY:
+            lines = random.choice(GOOD_NIGHT_LINES)
+            caption = f"{lines[0]}\n\n❍ 𐙚 ꒷꒦ ๋{display_html} 🌙\n\n{lines[1]}"
+            await make_and_send_thumbnail(message, lines, caption)
 
-@app.on_message(filters.command(["goodmorning", "gm"]))
-async def cmd_goodmorning(client, message: Message):
-    try:
-        msg_dt = message.date
-        if msg_dt.tzinfo is None:
-            msg_dt = msg_dt.replace(tzinfo=ZoneInfo("UTC"))
-        local_dt = msg_dt.astimezone(ZoneInfo(TIMEZONE))
-    except:
-        local_dt = datetime.datetime.now(ZoneInfo(TIMEZONE))
-    
-    uname = ""
-    uid = None
-    if message.from_user:
-        uid = message.from_user.id
-        uname = message.from_user.first_name or ""
-        if message.from_user.last_name:
-            uname += " " + message.from_user.last_name
-    
-    if not uname.strip():
-        uname = "User"
-    
-    if uid:
-        display_html = f"<a href='tg://user?id={uid}'>{html.escape(uname[:30])}</a>"
-    else:
-        display_html = html.escape(uname)
-    
-    if is_good_morning(local_dt) or ALLOW_OUT_OF_TIME_REPLY:
-        lines, caption = build_caption_and_lines("goodmorning", display_html)
-        await make_and_send_thumbnail(message, lines, caption)
-    else:
-        await message.reply_text(
-            f"{html.escape(uname)}, abhi morning time nahi hai. Still, send /goodmorning",
-            parse_mode=ParseMode.HTML
-        )
+# =========================================================
+# COMMANDS - These won't block other commands
+# =========================================================
+
+@app.on_message(filters.command("goodmorning"))
+async def cmd_gm(client, message: Message):
+    lines = random.choice(GOOD_MORNING_LINES)
+    uid = message.from_user.id
+    uname = message.from_user.first_name
+    display_html = f"<a href='tg://user?id={uid}'>{html.escape(uname)}</a>"
+    caption = f"{lines[0]}\n\n{display_html}\n\n{lines[1]}"
+    await make_and_send_thumbnail(message, lines, caption)
+
+@app.on_message(filters.command("goodnight"))
+async def cmd_gn(client, message: Message):
+    lines = random.choice(GOOD_NIGHT_LINES)
+    uid = message.from_user.id
+    uname = message.from_user.first_name
+    display_html = f"<a href='tg://user?id={uid}'>{html.escape(uname)}</a>"
+    caption = f"{lines[0]}\n\n{display_html}\n\n{lines[1]}"
+    await make_and_send_thumbnail(message, lines, caption)
