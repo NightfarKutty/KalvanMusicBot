@@ -14,7 +14,7 @@ services:
       - key: BOT_TOKEN
         scope: shared
       - key: STRING_SESSION
-        scope: shared
+        scope: shared 
       - key: MONGO_DB_URI
         scope: shared
       - key: OWNER_ID
