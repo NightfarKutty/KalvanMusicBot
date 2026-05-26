@@ -89,8 +89,10 @@ async def start_pm(client, message: Message, _):
                 await message.reply_sticker(random.choice(STICKERS))
             except Exception:
                 pass
-            return await message.reply_photo(
-                photo=config.START_IMG_URL,
+            # Video for help command
+            start_video = random.choice(config.START_VIDS)
+            return await message.reply_video(
+                video=start_video,
                 caption=_["help_1"].format(config.SUPPORT_CHAT),
                 reply_markup=keyboard,
             )
@@ -189,23 +191,27 @@ async def start_pm(client, message: Message, _):
             except Exception:
                 pass
             
-            # Get user photo
-            if message.from_user.photo:
-                userss_photo = await app.download_media(message.from_user.photo.big_file_id)
-            else:
-                userss_photo = "assets/nodp.png"
+            # Get user photo (for fallback)
+            try:
+                if message.from_user.photo:
+                    userss_photo = await app.download_media(message.from_user.photo.big_file_id)
+                else:
+                    userss_photo = None
+            except Exception:
+                userss_photo = None
                 
         except Exception:
-            userss_photo = "assets/nodp.png"
+            userss_photo = None
             
-        chat_photo = userss_photo if userss_photo != "assets/nodp.png" else config.START_IMG_URL
+        # Random video from START_VIDS list
+        start_video = random.choice(config.START_VIDS)
         
         # Original start.py buttons for private
         out = private_panel(_)
         
-        # Send start message with original caption
-        await message.reply_photo(
-            photo=chat_photo,
+        # Send start message with VIDEO
+        await message.reply_video(
+            video=start_video,
             caption=_["start_2"].format(message.from_user.mention, app.mention),
             reply_markup=InlineKeyboardMarkup(out),
         )
@@ -236,17 +242,6 @@ async def start_gp(client, message: Message, _):
         language = await get_lang(message.chat.id)
         _ = get_string(language)
     
-    # Group me user ka profile photo - NO ANIMATION FOR GROUP
-    try:
-        if message.from_user and message.from_user.photo:
-            userss_photo = await app.download_media(message.from_user.photo.big_file_id)
-        else:
-            userss_photo = "assets/nodp.png"
-    except:
-        userss_photo = "assets/nodp.png"
-    
-    chat_photo = userss_photo if userss_photo != "assets/nodp.png" else config.START_IMG_URL
-    
     # 🔥 STICKER PHIR BHEJO
     try:
         sticker_msg = await message.reply_sticker(random.choice(STICKERS))
@@ -257,9 +252,12 @@ async def start_gp(client, message: Message, _):
     out = start_panel(_)
     uptime = int(time.time() - _boot_)
     
-    # Direct reply without animation for groups
-    await message.reply_photo(
-        photo=chat_photo,
+    # Random video from START_VIDS list
+    start_video = random.choice(config.START_VIDS)
+    
+    # Direct reply with VIDEO for groups
+    await message.reply_video(
+        video=start_video,
         caption=_["start_1"].format(app.mention, get_readable_time(uptime)),
         reply_markup=InlineKeyboardMarkup(out),
     )
@@ -303,8 +301,12 @@ async def welcome(client, message: Message):
                     pass
 
                 out = start_panel(_)
-                await message.reply_photo(
-                    photo=config.START_IMG_URL,
+                
+                # Random video from START_VIDS list for welcome
+                start_video = random.choice(config.START_VIDS)
+                
+                await message.reply_video(
+                    video=start_video,
                     caption=_["start_3"].format(
                         message.from_user.first_name,
                         app.mention,
