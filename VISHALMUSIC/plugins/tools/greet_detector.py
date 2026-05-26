@@ -55,16 +55,19 @@ def generate_thumbnail(lines: List[str], username: str = "", width: int = 1280, 
     od = ImageDraw.Draw(overlay)
     od.rectangle(box, fill=(0, 0, 0, 110))
     img = Image.alpha_composite(img, overlay)
+    draw = ImageDraw.Draw(img)  # Recreate draw after composite
 
     # fonts
     def load_font(size: int):
         try:
             if FONT_PATH and os.path.exists(FONT_PATH):
                 return ImageFont.truetype(FONT_PATH, size)
-            # try a common system font
+            # try common system fonts
             for p in ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
                       "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
-                      "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf"]:
+                      "/usr/share/fonts/truetype/freefont/FreeSansBold.ttf",
+                      "/System/Library/Fonts/Helvetica.ttc",  # macOS
+                      "C:\\Windows\\Fonts\\Arial.ttf"]:      # Windows
                 if os.path.exists(p):
                     return ImageFont.truetype(p, size)
         except Exception:
@@ -75,6 +78,11 @@ def generate_thumbnail(lines: List[str], username: str = "", width: int = 1280, 
     sub_font = load_font(40)
     small_font = load_font(28)
 
+    # Function to get text dimensions (compatible with newer Pillow)
+    def get_text_size(text, font):
+        bbox = draw.textbbox((0, 0), text, font=font)
+        return bbox[2] - bbox[0], bbox[3] - bbox[1]
+
     # Draw lines centered
     center_x = width // 2
     # compute starting y to center all lines
@@ -82,7 +90,7 @@ def generate_thumbnail(lines: List[str], username: str = "", width: int = 1280, 
     line_heights = []
     fonts = [title_font if i == 0 else sub_font for i in range(len(lines))]
     for i, ln in enumerate(lines):
-        w, h = draw.textsize(ln, font=fonts[i])
+        w, h = get_text_size(ln, fonts[i])
         line_heights.append((w, h))
         total_text_height += h + 18
     start_y = (height - total_text_height) // 2
@@ -102,7 +110,7 @@ def generate_thumbnail(lines: List[str], username: str = "", width: int = 1280, 
     # draw username bottom-right
     if username:
         user_text = f"— {username}"
-        w, h = draw.textsize(user_text, font=small_font)
+        w, h = get_text_size(user_text, font=small_font)
         draw.text((width - w - 40, height - h - 30), user_text, font=small_font, fill=(220, 220, 220, 200))
 
     # finalize to JPEG bytes
@@ -130,8 +138,9 @@ async def make_and_send_thumbnail(message: Message, lines: List[str], caption_te
         img_bytes = await asyncio.to_thread(generate_thumbnail, lines, uname)
 
         # send as photo with caption and a download button
+        bot_username = app.username or "VISHALMUSIC_BOT"
         kb = InlineKeyboardMarkup(
-            [[InlineKeyboardButton("✦ ᴅᴏᴡɴʟᴏᴀᴅ ɪᴍᴀɢᴇ", url=f"https://t.me/{app.username or ''}")]]  # replace target if needed
+            [[InlineKeyboardButton("✦ ᴅᴏᴡɴʟᴏᴀᴅ ɪᴍᴀɢᴇ", url=f"https://t.me/{bot_username}")]]
         )
 
         # caption_text is expected to contain HTML-safe mention if needed
@@ -141,7 +150,7 @@ async def make_and_send_thumbnail(message: Message, lines: List[str], caption_te
         uname_safe = html.escape(uname if uname else "VISHAL")
         await message.reply_text(f"{html.escape(caption_text)}\n\n— {uname_safe}\n\n(⚠️ Thumbnail generator error: {e})")
 
-def build_caption_and_lines(kind: str, display_name_html: str) -> (List[str], str):
+def build_caption_and_lines(kind: str, display_name_html: str):
     # Returns lines for thumbnail and caption text, PERSONALIZED by embedding the username in the decorative line.
     # display_name_html should be HTML-escaped (or an <a> mention link) because caption will be sent with parse_mode="html".
     if kind == "goodnight":
@@ -151,7 +160,7 @@ def build_caption_and_lines(kind: str, display_name_html: str) -> (List[str], st
         ]
         caption = (
             "❖ ɢᴏᴏᴅ ɴɪɢʜᴛ ❖ sᴡᴇᴇᴛ ᴅʀᴇᴀᴍs\n\n"
-            f"❍   𐙚 ꒷꒦ ๋{display_name_html} ࣭ ꒷꒦ 🎟️ 💤\n\n"
+            f"❍   𐙚 ꒷꒦ ๋{display_name_html} ࣭ ꒷꒦ 🎟️ 💤\n\n"
             "❖ ɢᴏ ᴛᴏ ➥ sʟᴇᴇᴘ ᴇᴀʀʟʏ"
         )
     else:  # good morning
@@ -161,13 +170,13 @@ def build_caption_and_lines(kind: str, display_name_html: str) -> (List[str], st
         ]
         caption = (
             "☀️ ɢᴏᴏᴅ ᴍᴏʀɴɪɴɢ ☀️\n\n"
-            f"❍   𐙚 ꒷꒦ ๋{display_name_html} ࣭ ꒷꒦ 🎟️ ☕\n\n"
+            f"❍   𐙚 ꒷꒦ ๋{display_name_html} ࣭ ꒷꒦ 🎟️ ☕\n\n"
             "❖ ᴘʀᴀʏ ғᴏʀ ᴀ ɢᴏᴏᴅ ᴅᴀʏ"
         )
     return lines, caption
 
 # Main message handler (regex detection)
-@app.on_message(filters.text)
+@app.on_message(filters.text & ~filters.command(["goodnight", "goodmorning"]))
 async def greet_detector_handler(client, message: Message):
     text = message.text or ""
     # get message time in configured timezone
