@@ -9,3 +9,4 @@ pip install -r requirements.txt
 
 echo "Starting Vishal Music Bot..."
 python3 -m VISHALMUSIC
+ 
