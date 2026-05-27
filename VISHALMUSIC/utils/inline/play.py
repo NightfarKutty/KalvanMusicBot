@@ -41,9 +41,9 @@ def generate_progress_bar(played_sec, duration_sec):
     else:
         percentage = min((played_sec / duration_sec) * 100, 100)
     
-    bar_length = 15  # Increased for better visual
+    bar_length = 8  # Increased for better visual
     # Calculate filled length based on percentage
-    filled = int(round(bar_length * (percentage / 70)))
+    filled = int(round(bar_length * (percentage / 100)))
     
     # Remaining length
     remaining = bar_length - filled
