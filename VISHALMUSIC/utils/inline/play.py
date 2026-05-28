@@ -1,7 +1,6 @@
 import time
 from pyrogram.types import InlineKeyboardButton
 from VISHALMUSIC.utils.formatters import time_to_seconds
-from VISHALMUSIC.utils.database import get_autoplay_status
 
 LAST_UPDATE_TIME = {}
 
@@ -42,17 +41,23 @@ def generate_progress_bar(played_sec, duration_sec):
     else:
         percentage = min((played_sec / duration_sec) * 100, 100)
     
-    bar_length = 8
+    bar_length = 8  # Increased for better visual
+    # Calculate filled length based on percentage
     filled = int(round(bar_length * (percentage / 100)))
     
+    # Remaining length
     remaining = bar_length - filled
     
+    # If filled > 0, put heart at the end of filled part, otherwise heart at start
     if filled > 0:
         if filled == bar_length:
+            # Complete - heart at the end of all symbols
             return "𓂃" * (filled - 1) + "ꨄ"
         else:
+            # Heart moving with progress
             return "𓂃" * (filled - 1) + "ꨄ" + "𓂃" * remaining
     else:
+        # No progress - heart at beginning
         return "ꨄ" + "𓂃" * remaining
 
 
@@ -74,25 +79,15 @@ def stream_markup_timer(_, chat_id, played, dur):
     duration_sec = time_to_seconds(dur)
     bar = generate_progress_bar(played_sec, duration_sec)
 
-    ap_status = get_autoplay_status(chat_id)
-    ap_text = "🔁 ᴀᴜᴛᴏᴘʟᴀʏ : ᴏɴ ✅" if ap_status else "🔁 ᴀᴜᴛᴏᴘʟᴀʏ : ᴏꜰꜰ ❌"
-
     return (
         [[InlineKeyboardButton(text=f"{played} {bar} {dur}", callback_data="GetTimer")]] +
         control_buttons(_, chat_id) +
-        [[InlineKeyboardButton(text=ap_text, callback_data=f"AUTOPLAY {chat_id}")]] +
         [[InlineKeyboardButton(text=_["CLOSE_BUTTON"], callback_data="close")]]
     )
 
 
 def stream_markup(_, chat_id):
-    ap_status = get_autoplay_status(chat_id)
-    ap_text = "🔁 ᴀᴜᴛᴏᴘʟᴀʏ : ᴏɴ ✅" if ap_status else "🔁 ᴀᴜᴛᴏᴘʟᴀʏ : ᴏꜰꜰ ❌"
-    return (
-        control_buttons(_, chat_id) +
-        [[InlineKeyboardButton(text=ap_text, callback_data=f"AUTOPLAY {chat_id}")]] +
-        [[InlineKeyboardButton(text=_["CLOSE_BUTTON"], callback_data="close")]]
-    )
+    return control_buttons(_, chat_id) + [[InlineKeyboardButton(text=_["CLOSE_BUTTON"], callback_data="close")]]
 
 
 def playlist_markup(_, videoid, user_id, ptype, channel, fplay):
@@ -116,7 +111,6 @@ def playlist_markup(_, videoid, user_id, ptype, channel, fplay):
     ]
 
     return buttons
-
 
 def livestream_markup(_, videoid, user_id, mode, channel, fplay):
     return [
