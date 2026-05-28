@@ -20,6 +20,7 @@ from strings import get_string
 from VISHALMUSIC import YouTube, app
 from VISHALMUSIC.core.call import VISHAL
 from VISHALMUSIC.misc import SUDOERS, db
+from VISHALMUSIC.utils.autoplay_utils import is_autoplay_on
 from VISHALMUSIC.utils.database import (
     get_active_chats,
     get_assistant,
@@ -173,7 +174,7 @@ async def manage_callback(client, callback: CallbackQuery, _):
             return await callback.answer(_["admin_45"], show_alert=True)
         await callback.answer()
         await mute_on(chat_id)
-        await VISHALVISHAL.mute_stream(chat_id)
+        await VISHAL.mute_stream(chat_id)
         await callback.message.reply_text(_["admin_46"].format(user_mention))
 
     elif command == "Unmute":
@@ -265,6 +266,8 @@ async def handle_skip_replay(callback: CallbackQuery, _, chat_id: int, command: 
         db[chat_id][0]["speed_path"] = None
         db[chat_id][0]["speed"] = 1.0
 
+    ap_status = await is_autoplay_on(chat_id)
+
     if "live_" in queued:
         n, new_link = await YouTube.video(videoid, True)
         if n == 0:
@@ -280,7 +283,7 @@ async def handle_skip_replay(callback: CallbackQuery, _, chat_id: int, command: 
             await VISHAL.skip_stream(chat_id, new_link, video=status, image=image)
         except Exception:
             return await callback.message.reply_text(_["call_6"])
-        buttons = stream_markup(_, chat_id)
+        buttons = stream_markup(_, chat_id, autoplay_status=ap_status)
         img = await get_thumb(videoid)
         run = await callback.message.reply_photo(
             photo=img,
@@ -305,7 +308,7 @@ async def handle_skip_replay(callback: CallbackQuery, _, chat_id: int, command: 
             await VISHAL.skip_stream(chat_id, file_path, video=status, image=image)
         except Exception:
             return await mystic.edit_text(_["call_6"])
-        buttons = stream_markup(_, chat_id)
+        buttons = stream_markup(_, chat_id, autoplay_status=ap_status)
         img = await get_thumb(videoid)
         run = await callback.message.reply_photo(
             photo=img,
@@ -322,7 +325,7 @@ async def handle_skip_replay(callback: CallbackQuery, _, chat_id: int, command: 
             await VISHAL.skip_stream(chat_id, videoid, video=status)
         except Exception:
             return await callback.message.reply_text(_["call_6"])
-        buttons = stream_markup(_, chat_id)
+        buttons = stream_markup(_, chat_id, autoplay_status=ap_status)
         run = await callback.message.reply_photo(
             photo=STREAM_IMG_URL,
             caption=_["stream_2"].format(user),
@@ -345,7 +348,7 @@ async def handle_skip_replay(callback: CallbackQuery, _, chat_id: int, command: 
         except Exception:
             return await callback.message.reply_text(_["call_6"])
         if videoid == "telegram":
-            buttons = stream_markup(_, chat_id)
+            buttons = stream_markup(_, chat_id, autoplay_status=ap_status)
             run = await callback.message.reply_photo(
                 photo=(TELEGRAM_AUDIO_URL if str(streamtype) == "audio" else TELEGRAM_VIDEO_URL),
                 caption=_["stream_1"].format(SUPPORT_CHAT, title[:23], duration, user),
@@ -354,7 +357,7 @@ async def handle_skip_replay(callback: CallbackQuery, _, chat_id: int, command: 
             db[chat_id][0]["mystic"] = run
             db[chat_id][0]["markup"] = "tg"
         elif videoid == "soundcloud":
-            buttons = stream_markup(_, chat_id)
+            buttons = stream_markup(_, chat_id, autoplay_status=ap_status)
             run = await callback.message.reply_photo(
                 photo=(SOUNCLOUD_IMG_URL if str(streamtype) == "audio" else TELEGRAM_VIDEO_URL),
                 caption=_["stream_1"].format(SUPPORT_CHAT, title[:23], duration, user),
@@ -363,7 +366,7 @@ async def handle_skip_replay(callback: CallbackQuery, _, chat_id: int, command: 
             db[chat_id][0]["mystic"] = run
             db[chat_id][0]["markup"] = "tg"
         else:
-            buttons = stream_markup(_, chat_id)
+            buttons = stream_markup(_, chat_id, autoplay_status=ap_status)
             img = await get_thumb(videoid)
             run = await callback.message.reply_photo(
                 photo=img,
@@ -457,13 +460,16 @@ async def markup_timer():
                 except Exception:
                     _lang = get_string("en")
                 try:
+                    ap_status = await is_autoplay_on(chat_id)
                     buttons = stream_markup_timer(
                         _lang,
                         chat_id,
                         seconds_to_min(playing[0]["played"]),
                         playing[0]["dur"],
+                        autoplay_status=ap_status,
                     )
-                    await mystic.edit_reply_markup(reply_markup=InlineKeyboardMarkup(buttons))
+                    if buttons:
+                        await mystic.edit_reply_markup(reply_markup=InlineKeyboardMarkup(buttons))
                 except Exception:
                     continue
             except Exception:
@@ -472,7 +478,6 @@ async def markup_timer():
 asyncio.create_task(markup_timer())
 
 
-# ── Close Button Callback ──
 @app.on_callback_query(filters.regex("close") & ~BANNED_USERS)
 async def close_menu(_, query: CallbackQuery):
     try:
@@ -483,9 +488,8 @@ async def close_menu(_, query: CallbackQuery):
         await msg.delete()
     except:
         pass
-    
 
-# ── Stop Download Callback ──
+
 @app.on_callback_query(filters.regex("stop_downloading") & ~BANNED_USERS)
 @ActualAdminCB
 async def stop_download(_, query: CallbackQuery, _lang):
