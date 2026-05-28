@@ -15,6 +15,7 @@ import config
 from strings import get_string
 from VISHALMUSIC import LOGGER, YouTube, app
 from VISHALMUSIC.misc import db
+from VISHALMUSIC.utils.autoplay_utils import is_autoplay_on
 from VISHALMUSIC.utils.database import (
     add_active_chat,
     add_active_video_chat,
@@ -265,15 +266,30 @@ class Call:
             await auto_clean(popped)
             if not check:
                     await _clear_(chat_id)
-                    if chat_id in self.active_calls:
+
+                    autoplay_started = False
+                    if popped:
                         try:
-                            await client.leave_call(chat_id)
-                        except NoActiveGroupCall:
-                            pass
+                            if await is_autoplay_on(chat_id):
+                                from VISHALMUSIC.utils.stream.autoplay import auto_play_next
+                                autoplay_started = await auto_play_next(
+                                    chat_id,
+                                    popped.get("chat_id", chat_id),
+                                    popped.get("title", ""),
+                                )
                         except Exception:
-                            pass
-                        finally:
-                            self.active_calls.discard(chat_id)
+                            autoplay_started = False
+
+                    if not autoplay_started:
+                        if chat_id in self.active_calls:
+                            try:
+                                await client.leave_call(chat_id)
+                            except NoActiveGroupCall:
+                                pass
+                            except Exception:
+                                pass
+                            finally:
+                                self.active_calls.discard(chat_id)
                     return
         except:
             try:
@@ -300,6 +316,7 @@ class Call:
                 db[chat_id][0]["speed"] = 1.0
 
             video = True if str(streamtype) == "video" else False
+            ap_status = await is_autoplay_on(chat_id)
 
             if "live_" in queued:
                 n, link = await YouTube.video(videoid, True)
@@ -313,7 +330,7 @@ class Call:
                     return await app.send_message(original_chat_id, text=_["call_6"])
 
                 img = await get_thumb(videoid)
-                button = stream_markup(_, chat_id)
+                button = stream_markup(_, chat_id, autoplay_status=ap_status)
                 run = await app.send_photo(
                     chat_id=original_chat_id,
                     photo=img,
@@ -349,7 +366,7 @@ class Call:
                     return await app.send_message(original_chat_id, text=_["call_6"])
 
                 img = await get_thumb(videoid)
-                button = stream_markup(_, chat_id)
+                button = stream_markup(_, chat_id, autoplay_status=ap_status)
                 await mystic.delete()
                 run = await app.send_photo(
                     chat_id=original_chat_id,
@@ -372,7 +389,7 @@ class Call:
                 except:
                     return await app.send_message(original_chat_id, text=_["call_6"])
 
-                button = stream_markup(_, chat_id)
+                button = stream_markup(_, chat_id, autoplay_status=ap_status)
                 run = await app.send_photo(
                     chat_id=original_chat_id,
                     photo=config.STREAM_IMG_URL,
@@ -390,7 +407,7 @@ class Call:
                     return await app.send_message(original_chat_id, text=_["call_6"])
 
                 if videoid == "telegram":
-                    button = stream_markup(_, chat_id)
+                    button = stream_markup(_, chat_id, autoplay_status=ap_status)
                     run = await app.send_photo(
                         chat_id=original_chat_id,
                         photo=(
@@ -407,7 +424,7 @@ class Call:
                     db[chat_id][0]["markup"] = "tg"
 
                 elif videoid == "soundcloud":
-                    button = stream_markup(_, chat_id)
+                    button = stream_markup(_, chat_id, autoplay_status=ap_status)
                     run = await app.send_photo(
                         chat_id=original_chat_id,
                         photo=config.SOUNCLOUD_IMG_URL,
@@ -421,7 +438,7 @@ class Call:
 
                 else:
                     img = await get_thumb(videoid)
-                    button = stream_markup(_, chat_id)
+                    button = stream_markup(_, chat_id, autoplay_status=ap_status)
                     try:
                         run = await app.send_photo(
                             chat_id=original_chat_id,
@@ -521,4 +538,4 @@ class Call:
             assistant.on_update()(unified_update_handler)
 
 
-VISHAL= Call()
+VISHAL = Call()
