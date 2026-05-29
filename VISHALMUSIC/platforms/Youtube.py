@@ -748,11 +748,19 @@ class YouTubeAPI:
                 raise ValueError("Track not found (yt-dlp fallback)")
             info = json.loads(stdout.decode())
         thumb = (info.get("thumbnail") or info.get("thumbnails", [{}])[0].get("url", "")).split("?")[0]
+        _dur = info.get("duration")
+        if isinstance(_dur, str) and _dur:
+            duration_min = _dur
+        elif isinstance(_dur, (int, float)) and _dur > 0:
+            _secs = int(_dur)
+            duration_min = f"{_secs // 60}:{_secs % 60:02d}"
+        else:
+            duration_min = None
         details = {
             "title": info.get("title", ""),
             "link": info.get("webpage_url", self._prepare_link(link, videoid)),
             "vidid": info.get("id", ""),
-            "duration_min": info.get("duration") if isinstance(info.get("duration"), str) else None,
+            "duration_min": duration_min,
             "thumb": thumb,
         }
         return details, info.get("id", "")
