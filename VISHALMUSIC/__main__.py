@@ -56,7 +56,7 @@ async def init():
     await VISHAL.start()
 
     try:
-        await VISHAL.stream_call("https://files.catbox.moe/myyexr.mp4")
+        await VISHAL.stream_call("https://files.catbox.moe/oxty8c.mp4")
     except NoActiveGroupCall:
         LOGGER("VISHALMUSIC").error(
             "ᴘʟᴇᴀsᴇ ᴛᴜʀɴ ᴏɴ ᴛʜᴇ ᴠᴏɪᴄᴇ ᴄʜᴀᴛ ᴏғ ʏᴏᴜʀ ʟᴏɢ ɢʀᴏᴜᴘ/ᴄʜᴀɴɴᴇʟ.\n\nʙᴏᴛ sᴛᴏᴘᴘᴇᴅ..."
