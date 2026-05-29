@@ -582,34 +582,54 @@ async def auto_play_next(
             chat_id, queries, last_title, last_vidid, artist, movie, mood, lang
         )
 
-        # Fallback chain
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # FALLBACK CHAIN
+        # Each fallback checks duration + repeat — long songs are skipped
+        # and the next fallback is tried automatically.
+        # FIX: Previously return False on long song — now tries next fallback.
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        async def _fallback_track(query):
+            try:
+                _details, _vidid = await yt.track(query)
+                if not _vidid:
+                    return None, None
+                if _vidid == last_vidid:
+                    return None, None
+                if not is_short_song(_details.get("duration_min", "0:00")):
+                    return None, None
+                if await is_repeat(chat_id, _vidid, _details.get("title", "")):
+                    return None, None
+                return _details, _vidid
+            except Exception:
+                return None, None
+
         if not vidid and movie:
-            details, vidid = await yt.track(f"{movie} all songs")
-            if vidid == last_vidid:
-                vidid = None
+            details, vidid = await _fallback_track(f"{movie} all songs")
 
         if not vidid and artist:
-            details, vidid = await yt.track(f"{artist} hits")
-            if vidid == last_vidid:
-                vidid = None
+            details, vidid = await _fallback_track(f"{artist} hits")
 
         if not vidid and lang:
-            details, vidid = await yt.track(f"{lang} trending songs")
-            if vidid == last_vidid:
-                vidid = None
+            details, vidid = await _fallback_track(f"{lang} trending songs")
 
         if not vidid:
-            details, vidid = await yt.track("latest bollywood hits 2025")
+            details, vidid = await _fallback_track("latest bollywood hits 2025")
+
+        if not vidid:
+            details, vidid = await _fallback_track("top hindi songs 2024")
+
+        if not vidid:
+            details, vidid = await _fallback_track("arijit singh best songs")
+
+        if not vidid:
+            details, vidid = await _fallback_track("trending indian songs")
 
         if not vidid:
             try:
                 await msg.edit_text("❌ ɴᴏ ꜱᴏɴɢ ꜰᴏᴜɴᴅ")
             except Exception:
                 pass
-            return False
-
-        # ⏱️ NEW: Final duration check for fallback songs
-        if details and not is_short_song(details.get("duration_min", "0:00")):
             return False
 
         new_title = details.get("title", "") if details else ""
