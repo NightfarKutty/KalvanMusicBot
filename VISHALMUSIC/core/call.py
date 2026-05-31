@@ -263,18 +263,16 @@ class Call:
             else:
                 loop = loop - 1
                 await set_loop(chat_id, loop)
-            await auto_clean(popped)
             if not check:
-                    await _clear_(chat_id)
-
+                    # FIX: Run autoplay BEFORE clearing active-chat state so
+                    # is_active_chat() is still True inside stream(). Old code
+                    # called _clear_() first which did remove_active_chat()
+                    # causing stream() to re-join an already-joined VC.
                     autoplay_started = False
                     if popped:
                         try:
                             if await is_autoplay_on(chat_id):
                                 from VISHALMUSIC.utils.stream.autoplay import auto_play_next
-                                # FIX 1: Pass vidid of finished song so it gets
-                                # added to RECENT before searching — prevents
-                                # the same song from being picked again.
                                 autoplay_started = await auto_play_next(
                                     chat_id,
                                     popped.get("chat_id", chat_id),
@@ -284,7 +282,14 @@ class Call:
                         except Exception:
                             autoplay_started = False
 
+                    # Clean up queue and files after autoplay decision
+                    await auto_clean(popped)
+                    db[chat_id] = []
+                    await set_loop(chat_id, 0)
+
                     if not autoplay_started:
+                        await remove_active_video_chat(chat_id)
+                        await remove_active_chat(chat_id)
                         if chat_id in self.active_calls:
                             try:
                                 await client.leave_call(chat_id)
@@ -522,7 +527,7 @@ class Call:
                         return
 
                 elif isinstance(update, StreamEnded):
-                    if update.stream_type == StreamEnded.Type.AUDIO:
+                    if update.stream_type in (StreamEnded.Type.AUDIO, StreamEnded.Type.VIDEO):
                         assistant = await group_assistant(self, update.chat_id)
                         await self.play(assistant, update.chat_id)
 
