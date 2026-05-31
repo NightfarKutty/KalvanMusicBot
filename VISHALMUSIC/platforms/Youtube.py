@@ -571,6 +571,20 @@ async def cached_youtube_search(query: str) -> List[Dict]:
             _cache[key] = (now, result)
     return result
 
+
+@capture_internal_err
+async def youtube_search_multi(query: str, limit: int = 8) -> List[Dict]:
+    """
+    Fetch multiple YouTube results for a query — used by autoplay so it can
+    score and pick from a pool of candidates rather than always getting the
+    same #1 result. Results are NOT cached (we want variety across calls).
+    """
+    try:
+        data = await VideosSearch(query, limit=limit).next()
+        return data.get("result", [])
+    except Exception:
+        return []
+
 async def shell_cmd(cmd):
     proc = await asyncio.create_subprocess_shell(
         cmd,
