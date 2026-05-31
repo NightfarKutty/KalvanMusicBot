@@ -1,8 +1,6 @@
 import asyncio
-import random
 import re
 import time
-
 import aiohttp
 
 from VISHALMUSIC import app
@@ -13,453 +11,343 @@ from VISHALMUSIC.platforms.Youtube import YouTubeAPI
 yt = YouTubeAPI()
 autoplay_db = mongodb.autoplay
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  PROTECTION SYSTEM
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 RECENT = {}
 RECENT_TITLES = {}
 AUTO_PLAYING = {}
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🇮🇳 INDIAN LANGUAGE DATABASE
+#  PURE DYNAMIC EXTRACTORS (No keywords)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-LANG_DB = {
-    "hindi": ["hindi", "bollywood", "arijit", "jubin", "atif", "hindi song", "bollywood song"],
-    "punjabi": ["punjabi", "sidhu", "diljit", "karan", "ammy", "jatt", "punjabi song"],
-    "english": ["english", "ed sheeran", "taylor swift", "justin bieber", "english song"],
-    "bhojpuri": ["bhojpuri", "pawan singh", "khesari", "bhojpuri song"],
-    "haryanvi": ["haryanvi", "khasa", "masoom sharma", "haryanvi song"],
-    "gujarati": ["gujarati", "gujju", "garba", "gujarati song"],
-    "tamil": ["tamil", "tamil song", "kollywood", "anirudh", "tamil cinema"],
-    "telugu": ["telugu", "telugu song", "tollywood", "devi sri", "telugu cinema"],
-    "bengali": ["bengali", "bangla", "bengali song"],
-    "marathi": ["marathi", "marathi song", "maharashtra"],
-    "urdu": ["urdu", "urdu song", "pakistani", "nusrat"],
-}
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🎭 MOOD DATABASE
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-MOOD_DB = {
-    "sad": ["sad", "broken", "heart", "bewafa", "alone", "cry", "dard", "tanha", "rula", "sad song"],
-    "love": ["love", "romantic", "ishq", "pyaar", "mohabbat", "love song", "romantic song", "pyar", "ishq wala"],
-    "party": ["party", "dj", "dance", "club", "bhangra", "party song", "dj song", "dance song", "masala"],
-    "wedding": ["wedding", "shaadi", "marriage", "dulhan", "mehendi", "sangeet"],
-    "devotional": ["devotional", "bhajan", "aarti", "mantra", "shiva", "krishna", "ram", "ganesha", "hanuman"],
-    "oldschool": ["old", "classic", "90s", "80s", "kishore", "lata", "rafi", "old song", "retro", "purana"],
-    "punjabi": ["punjabi", "sidhu", "diljit", "bhangra", "jatt", "punjabi song"],
-    "sufi": ["sufi", "qawwali", "nusrat", "kalam", "sufiana"],
-}
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🎤 ARTIST DATABASE
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-ARTIST_DB = {
-    "arijit singh": ["arijit", "arijit singh", "arijit song", "arijit new"],
-    "atif aslam": ["atif", "atif aslam", "atif song"],
-    "sidhu moosewala": ["sidhu", "sidhu moosewala", "sidhu song"],
-    "diljit dosanjh": ["diljit", "diljit dosanjh", "diljit song"],
-    "karan aujla": ["karan", "karan aujla", "karan song"],
-    "jubin nautiyal": ["jubin", "jubin nautiyal", "jubin song"],
-    "badshah": ["badshah", "badshah song", "badshah new"],
-    "yo yo honey singh": ["honey singh", "yo yo", "brown rang", "yo yo honey singh"],
-    "neha kakkar": ["neha kakkar", "neha song", "neha new"],
-    "shreya ghoshal": ["shreya", "shreya ghoshal", "shreya song"],
-    "sonu nigam": ["sonu", "sonu nigam", "sonu song"],
-    "alka yagnik": ["alka", "alka yagnik", "alka song"],
-    "udit narayan": ["udit", "udit narayan", "udit song"],
-    "kumar sanu": ["kumar sanu", "kumar song"],
-    "lata mangeshkar": ["lata", "lata mangeshkar", "lata song"],
-    "kishore kumar": ["kishore", "kishore kumar", "kishore song"],
-    "mohammad rafi": ["rafi", "mohammad rafi", "rafi song"],
-    "ap dhillon": ["ap dhillon", "ap", "dhillon", "ap song"],
-    "gurinder gill": ["gurinder gill", "gill", "gurinder song"],
-}
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🎬 MOVIE DATABASE
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-MOVIE_DB = {
-    "animal": ["animal", "animal song", "animal movie"],
-    "kabir singh": ["kabir singh", "kabir movie"],
-    "aashiqui 2": ["aashiqui", "aashiqui 2", "aashiqui song"],
-    "shershaah": ["shershaah", "shershaah song", "shershaah movie"],
-    "pushpa": ["pushpa", "pushpa song", "pushpa movie", "srivali"],
-    "kgf": ["kgf", "kgf song", "rocky bhai"],
-    "pathaan": ["pathaan", "pathaan song", "shah rukh"],
-    "jawan": ["jawan", "jawan song", "jawan movie"],
-    "dunki": ["dunki", "dunki song", "dunki movie"],
-    "gadar 2": ["gadar", "gadar 2", "gadar song"],
-    "rocky aur rani": ["rocky", "rani", "rocky aur rani", "kjo"],
-    "tu jhoothi main makkaar": ["tu jhoothi", "tjmm", "ranbir", "shraddha"],
-    "bhool bhulaiyaa 2": ["bhool bhulaiyaa", "bb2", "kartik aaryan"],
-    "brahmastra": ["brahmastra", "astra", "ranbir", "alia"],
-    "tanhaji": ["tanhaji", "ajay devgn", "tanhaji song"],
-    "chhichhore": ["chhichhore", "sushant", "chhichhore song"],
-}
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  TRENDING KEYWORDS
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-TRENDING_STYLES = [
-    "hindi songs",
-    "punjabi songs",
-    "bollywood songs",
-    "Instagram trending",
-    "Love songs",
-    "sad songs",
-]
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🌍 DETECT FUNCTIONS
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-def detect_lang(title):
+def extract_core_words(title):
+    """Extract unique meaningful words from title - no hardcode"""
     if not title:
-        return "hindi"
-    title = title.lower()
-    for lang, keys in LANG_DB.items():
-        if any(x in title for x in keys):
-            return lang
-    return "hindi"
+        return []
+    
+    t = title.lower()
+    
+    # Remove common noise patterns
+    t = re.sub(r"\([^)]*\)", "", t)
+    t = re.sub(r"\[[^\]]*\]", "", t)
+    t = re.sub(r"\{[^}]*\}", "", t)
+    
+    # Split by separators
+    for sep in [" - ", " | ", " — ", " ft ", " feat "]:
+        if sep in t:
+            t = t.split(sep)[0]
+            break
+    
+    # Extract words
+    words = re.findall(r"[a-z]+(?:[a-z]+)*", t)
+    
+    # Filter short words and common noise
+    noise = ["the", "and", "for", "with", "official", "video", "lyrics", "hd", "4k", "song", "new", "latest", "full", "audio", "lyrical"]
+    
+    result = []
+    for w in words:
+        if len(w) > 3 and w not in noise:
+            result.append(w)
+    
+    return result
 
-def detect_mood(title):
-    if not title:
-        return "normal"
-    title = title.lower()
-    for mood, keys in MOOD_DB.items():
-        if any(x in title for x in keys):
-            return mood
-    return "normal"
-
-def extract_artist(title):
-    if not title:
+def get_primary_identifier(title, core_words):
+    """Get main identifier (artist/movie guess) from title structure"""
+    if not title or not core_words:
         return ""
-    title_lower = title.lower()
-    for artist, keys in ARTIST_DB.items():
-        if any(x in title_lower for x in keys):
-            return artist
-    parts = re.split(r"[-|(]", title)
-    if len(parts) > 1:
-        candidate = parts[0].strip()
-        if len(candidate) < 30:
+    
+    # Get text before first separator
+    for sep in [" - ", " | ", " — "]:
+        if sep in title:
+            primary = title.split(sep)[0].strip()
+            if len(primary) > 2 and len(primary) < 40:
+                return primary
+    
+    # Get first 2-3 words as identifier
+    if len(core_words) >= 2:
+        return " ".join(core_words[:2])
+    elif core_words:
+        return core_words[0]
+    
+    return ""
+
+def get_secondary_identifier(title, core_words):
+    """Get secondary identifier (movie/album guess)"""
+    if not title or not core_words:
+        return ""
+    
+    # Look for patterns like "from X" or "movie X"
+    patterns = [
+        r'from\s+([a-z0-9\s]+?)(?:\s+[a-z]+)?$',
+        r'movie\s+([a-z0-9\s]+?)$',
+        r'album\s+([a-z0-9\s]+?)$',
+        r'\((?:from\s+)?([a-z0-9\s]+?)\)'
+    ]
+    
+    t = title.lower()
+    for pattern in patterns:
+        match = re.search(pattern, t)
+        if match:
+            candidate = match.group(1).strip()
+            if len(candidate) > 2 and len(candidate) < 35:
+                return candidate
+    
+    # Get last few words if they seem like a movie
+    if len(core_words) > 3:
+        candidate = " ".join(core_words[-2:])
+        if len(candidate) > 3:
             return candidate
+    
     return ""
 
-def detect_movie(title):
-    if not title:
-        return ""
-    title = title.lower()
-    for movie, keys in MOVIE_DB.items():
-        if any(x in title for x in keys):
-            return movie
-    return ""
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  TITLE NORMALIZER
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-def normalize_title(title: str) -> str:
+def normalize_title(title):
     if not title:
         return ""
     t = title.lower().strip()
-    for sep in [" - ", " | ", " — ", " ft ", " feat "]:
+    for sep in [" - ", " | ", " ft ", " feat "]:
         if sep in t:
-            t = t.split(sep)[0].strip()
-            break
-    t = re.sub(r"[\(\[\{][^\)\]\}]*[\)\]\}]", "", t)
-    noise = [
-        "official", "video", "music", "audio", "lyrics", "lyrical",
-        "lyric", "full", "hd", "hq", "4k", "song", "new", "latest",
-        "visualizer", "teaser", "promo",
-    ]
-    for w in noise:
-        t = re.sub(rf"\b{w}\b", "", t)
-    t = re.sub(r"\s+", " ", t).strip()
-    return t
+            t = t.split(sep)[0]
+    t = re.sub(r"[\(\[{].*?[\)\]}]", "", t)
+    t = re.sub(r"\b(official|video|lyrics|hd|4k|song|audio|full|new|latest)\b", "", t)
+    return re.sub(r"\s+", " ", t).strip()
 
-def _same_song(stored: str, candidate: str) -> bool:
-    if not stored or not candidate:
+def same_song(a, b):
+    if not a or not b:
         return False
-    if len(stored) < 4 or len(candidate) < 4:
-        return False
-    short = stored if len(stored) <= len(candidate) else candidate
-    long  = candidate if len(stored) <= len(candidate) else stored
-    return long.startswith(short) or short in long
+    if a in b or b in a:
+        return True
+    words_a = set(a.split())
+    words_b = set(b.split())
+    if words_a and words_b:
+        return len(words_a & words_b) / max(len(words_a), len(words_b)) > 0.6
+    return False
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🔁 REPEAT CHECK
+#  REPEAT PROTECTION
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-async def is_repeat(chat_id, vidid, title: str = "") -> bool:
-    current = time.time()
+async def is_repeat(chat_id, vidid, title=""):
+    now = time.time()
     if chat_id not in RECENT:
         RECENT[chat_id] = []
-    RECENT[chat_id] = [(v, t) for v, t in RECENT[chat_id] if current - t < 14400]
+    RECENT[chat_id] = [(v, t) for v, t in RECENT[chat_id] if now - t < 14400]
     if vidid in [v for v, _ in RECENT[chat_id]]:
         return True
     if title:
         norm = normalize_title(title)
-        if norm and len(norm) >= 4:
+        if norm:
             if chat_id not in RECENT_TITLES:
                 RECENT_TITLES[chat_id] = []
-            RECENT_TITLES[chat_id] = [
-                (n, t) for n, t in RECENT_TITLES[chat_id] if current - t < 14400
-            ]
-            for stored_norm, _ in RECENT_TITLES[chat_id]:
-                if _same_song(stored_norm, norm):
+            RECENT_TITLES[chat_id] = [(n, t) for n, t in RECENT_TITLES[chat_id] if now - t < 14400]
+            for sn, _ in RECENT_TITLES[chat_id]:
+                if same_song(sn, norm):
                     return True
     return False
 
-async def add_recent(chat_id, vidid, title: str = "") -> None:
+async def add_recent(chat_id, vidid, title=""):
     if not vidid:
         return
-    current = time.time()
+    now = time.time()
     if chat_id not in RECENT:
         RECENT[chat_id] = []
-    RECENT[chat_id].append((vidid, current))
+    RECENT[chat_id].append((vidid, now))
     if len(RECENT[chat_id]) > 100:
         RECENT[chat_id] = RECENT[chat_id][-100:]
     if title:
         norm = normalize_title(title)
-        if norm and len(norm) >= 4:
+        if norm:
             if chat_id not in RECENT_TITLES:
                 RECENT_TITLES[chat_id] = []
-            RECENT_TITLES[chat_id].append((norm, current))
+            RECENT_TITLES[chat_id].append((norm, now))
             if len(RECENT_TITLES[chat_id]) > 100:
                 RECENT_TITLES[chat_id] = RECENT_TITLES[chat_id][-100:]
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  SMART QUERY BUILDER
+#  QUERY BUILDER (Pure dynamic)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-def build_smart_queries(title, artist, movie, lang, mood):
+def build_queries(title, primary_id, secondary_id, core_words):
     queries = []
-    clean_title = re.sub(
-        r"official|video|lyrics|lyrical|hd|4k|music|song|audio|full|hq",
-        "",
-        title,
-        flags=re.IGNORECASE,
-    ).strip()
-    queries.append(clean_title)
-    queries.append(f"{clean_title} song")
-    if artist:
-        queries.append(f"{artist} songs")
-        queries.append(f"{artist} hits")
-        if movie:
-            queries.append(f"{artist} {movie} song")
-        if lang:
-            queries.append(f"{artist} {lang} songs")
-    if movie:
-        queries.append(f"{movie} songs")
-        queries.append(f"{movie} all songs")
-    if mood == "sad":
-        queries += ["sad hindi songs", "heartbreak songs hindi"]
-    elif mood == "love":
-        queries += ["romantic hindi songs", "love songs bollywood"]
-    elif mood == "party":
-        queries += ["party punjabi songs", "dj remix hindi"]
-    if lang == "hindi":
-        queries += ["latest bollywood hits", "trending hindi songs 2025"]
-    elif lang == "punjabi":
-        queries += ["latest punjabi songs 2025", "punjabi hits"]
-    if len(queries) < 5:
-        queries.extend(TRENDING_STYLES)
-    bad_words = [
-        "slowed", "reverb", "lofi", "8d", "live", "mix", "dj remix",
-        "bass boosted", "cover", "karaoke", "instrumental", "sped up",
-    ]
+    
+    # Original clean title
+    clean = normalize_title(title)
+    if clean and len(clean) > 4:
+        queries.append(clean)
+    
+    # Primary identifier (artist)
+    if primary_id and len(primary_id) > 2:
+        queries.append(f"{primary_id} songs")
+        queries.append(f"{primary_id} hits")
+        queries.append(f"{primary_id} new")
+    
+    # Secondary identifier (movie)
+    if secondary_id and len(secondary_id) > 2:
+        queries.append(f"{secondary_id} songs")
+        queries.append(f"{secondary_id} all")
+    
+    # Combined
+    if primary_id and secondary_id:
+        queries.insert(0, f"{primary_id} {secondary_id}")
+    
+    # Core words combination
+    if len(core_words) >= 2:
+        queries.append(" ".join(core_words[:3]))
+    
+    # Generic fallbacks (least priority)
+    queries.append("popular songs")
+    queries.append("trending music")
+    queries.append("hits")
+    
+    # Remove duplicates and filter
+    seen = set()
     final = []
     for q in queries:
-        q_lower = q.lower()
-        if not any(bad in q_lower for bad in bad_words):
-            if q not in final and len(q) > 3:
-                final.append(q)
-    return final[:20]
+        if q not in seen and len(q) > 3 and len(q) < 60:
+            seen.add(q)
+            final.append(q)
+    
+    return final[:12]
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🎵 BEST SONG FINDER (FULLY FIXED)
+#  SIMILARITY SCORING (No hardcode)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-async def get_best_song(chat_id, queries, last_title, last_vidid, artist, movie, mood, lang):
+def calculate_similarity(title1, title2):
+    """Calculate how similar two titles are - pure math"""
+    if not title1 or not title2:
+        return 0
+    
+    t1 = title1.lower()
+    t2 = title2.lower()
+    
+    # Extract words
+    words1 = set(re.findall(r"[a-z]+(?:[a-z]+)*", t1))
+    words2 = set(re.findall(r"[a-z]+(?:[a-z]+)*", t2))
+    
+    # Remove very short words
+    words1 = {w for w in words1 if len(w) > 2}
+    words2 = {w for w in words2 if len(w) > 2}
+    
+    if not words1 or not words2:
+        return 0
+    
+    # Jaccard similarity
+    intersection = len(words1 & words2)
+    union = len(words1 | words2)
+    
+    return intersection / union if union > 0 else 0
+
+def calculate_context_score(new_title, last_title, primary_id, secondary_id):
+    """Score based on context match - pure dynamic"""
+    score = 0
+    
+    # Direct title similarity
+    similarity = calculate_similarity(new_title, last_title)
+    score += similarity * 100
+    
+    # Primary identifier match
+    if primary_id and primary_id.lower() in new_title.lower():
+        score += 60
+    
+    # Secondary identifier match
+    if secondary_id and secondary_id.lower() in new_title.lower():
+        score += 40
+    
+    # Core word overlap
+    last_words = set(re.findall(r"[a-z]+", last_title.lower()))
+    new_words = set(re.findall(r"[a-z]+", new_title.lower()))
+    
+    meaningful_overlap = 0
+    for w in last_words:
+        if len(w) > 3 and w in new_words:
+            meaningful_overlap += 15
+    score += meaningful_overlap
+    
+    return score
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  FIND SONG (Pure logic)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+async def find_song(chat_id, queries, last_title, last_vidid, primary_id, secondary_id):
     candidates = []
-    original_words = last_title.lower().split()
     
     for q in queries:
         try:
-            details, vidid = await yt.track(q)
-            if not vidid:
+            info, vid = await yt.track(q)
+            if not vid or vid == last_vidid:
                 continue
-            if vidid == last_vidid:
-                continue
-                
-            title = details.get("title", "").lower()
-            duration = details.get("duration_min", "0:00") or "0:00"
             
-            # DURATION PARSE & CHECK
+            title = info.get("title", "").lower()
+            duration = info.get("duration_min", "0:00")
+            
+            # Duration check: between 1.5 and 8 minutes
             try:
                 if ":" in duration:
-                    parts = duration.split(":")
-                    if len(parts) == 2:
-                        mins = int(parts[0])
-                        secs = int(parts[1])
-                    elif len(parts) == 3:
-                        hours = int(parts[0])
-                        mins = int(parts[1]) + (hours * 60)
-                        secs = int(parts[2])
-                    else:
-                        mins = 0
-                        secs = 0
+                    mins = int(duration.split(":")[0])
                 else:
                     mins = int(float(duration))
-                    secs = 0
-                
-                # 🔥 STRICT: ONLY 1.5 TO 9 MINUTES
-                if mins < 1.5 or mins > 9:
+                if mins < 1.5 or mins > 8:
                     continue
             except:
                 continue
             
-            title_lower = title.lower()
-            
-            # 🔥🔥🔥 SUPER STRONG PLAYLIST DETECTION 🔥🔥🔥
-            playlist_patterns = [
-                r"best of \w+ \d+",      # "best of arijit singh 20"
-                r"top \d+",               # "top 20"
-                r"\d+ hits",              # "20 hits"
-                r"\d+ songs",             # "20 songs"
-                r"non[ -]?stop",          # "nonstop", "non stop"
-                r"jukebox",
-                r"playlist",
-                r"megamix",
-                r"mashup",
-                r"continuous",
-                r"collection",
-                r"compilation",
-                r"greatest hits",
-                r"all songs",
-                r"full album",
-                r"audio jukebox",
-                r"hits \d+",
-                r"best of",
-                r"superhit",
+            # Block obvious compilations (pattern based)
+            t_lower = title.lower()
+            compilation_patterns = [
+                r'top\s+\d+', r'\d+\s+hits', r'\d+\s+songs',
+                r'non[- ]?stop', r'jukebox', r'playlist', r'megamix'
             ]
-            
-            is_playlist = False
-            for pattern in playlist_patterns:
-                if re.search(pattern, title_lower):
-                    is_playlist = True
-                    break
-            
-            # Extra check: long duration with numbers in title
-            if mins > 7 and re.search(r'\b\d{2}\b', title_lower):
-                is_playlist = True
-            
-            # Check for track list pattern (01. 02. 03.)
-            if re.search(r'\d{2}\.\s*\w+', title_lower):
-                is_playlist = True
-            
-            if is_playlist:
+            is_compilation = any(re.search(p, t_lower) for p in compilation_patterns)
+            if is_compilation:
                 continue
             
-            # Bad content filter
-            bad_words = [
-                "slowed", "reverb", "lofi", "8d", "live", "concert",
-                "cover", "karaoke", "instrumental", "sped up", "remix"
-            ]
-            if any(x in title for x in bad_words):
+            # Block if title has 2+ numbers (likely compilation)
+            if len(re.findall(r'\d+', t_lower)) >= 2:
                 continue
             
-            # SCORING SYSTEM
-            score = 0
-            
-            # Artist match - HIGHEST PRIORITY
-            if artist and artist.lower() in title:
-                score += 80
-                if title.startswith(artist.lower()):
-                    score += 40
-            
-            # Movie match
-            if movie and movie.lower() in title:
-                score += 60
-            
-            # Language match
-            if lang and any(x in title for x in LANG_DB.get(lang, [])):
-                score += 30
-            
-            # Mood match
-            if mood != "normal":
-                mood_keywords = MOOD_DB.get(mood, [])
-                if any(x in title for x in mood_keywords):
-                    score += 20
-            
-            # Word match from original title
-            match_count = sum(1 for w in original_words[:5] if w in title and len(w) > 3)
-            score += match_count * 10
-            
-            # Penalty for compilation keywords
-            if any(x in title_lower for x in ["best of", "top", "hits", "collection", "greatest"]):
-                score -= 60
+            # Calculate context score
+            score = calculate_context_score(title, last_title, primary_id, secondary_id)
             
             # Repeat check
-            if await is_repeat(chat_id, vidid, details.get("title", "")):
+            if await is_repeat(chat_id, vid, title):
                 continue
             
-            if score > 20:
-                candidates.append((score, vidid, details))
+            if score > 25:
+                candidates.append((score, vid, info))
                 
         except Exception:
             continue
-        
         await asyncio.sleep(0.1)
     
-    candidates.sort(key=lambda x: x[0], reverse=True)
-    
     if candidates:
+        candidates.sort(key=lambda x: x[0], reverse=True)
         return candidates[0][1], candidates[0][2]
-    
     return None, None
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🖼 THUMBNAIL
+#  THUMBNAIL
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-async def get_thumbnail_direct(video_id):
-    urls = [
-        f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg",
-        f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg",
-        f"https://img.youtube.com/vi/{video_id}/mqdefault.jpg",
-    ]
-    async with aiohttp.ClientSession() as session:
-        for url in urls:
+async def get_thumbnail(vid):
+    async with aiohttp.ClientSession() as s:
+        for url in [f"https://img.youtube.com/vi/{vid}/maxresdefault.jpg", f"https://img.youtube.com/vi/{vid}/hqdefault.jpg"]:
             try:
-                async with session.get(url) as resp:
-                    if resp.status == 200:
+                async with s.get(url) as r:
+                    if r.status == 200:
                         return url
-            except Exception:
+            except:
                 continue
-    return urls[-1]
+    return f"https://img.youtube.com/vi/{vid}/mqdefault.jpg"
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🇮🇳 INDIAN EMOJI
+#  MAIN AUTOPLAY
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-def get_indian_emoji():
-    emojis = ["🇮🇳","🎧","❤️","🎶","✨","🎤","💖","🎵","🔥","💫","🎸","💕","🪩","🌙","💘","🥰","🎼","⚡","💞","🦋","🎶","💜","🎤","🌸","🕺","💃","💝","🎧","🌈","❣️","🪘","💗","✨","🔥"]
-    return random.choice(emojis)
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🚀 MAIN AUTOPLAY FUNCTION
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-async def auto_play_next(
-    chat_id: int,
-    original_chat_id: int,
-    last_title: str = "",
-    last_vidid: str = "",
-) -> bool:
+async def auto_play_next(chat_id, original_chat_id, last_title="", last_vidid=""):
     from VISHALMUSIC.utils.database import get_lang
     from VISHALMUSIC.utils.stream.stream import stream
     from strings import get_string
@@ -477,91 +365,45 @@ async def auto_play_next(
         if last_vidid:
             await add_recent(chat_id, last_vidid, last_title)
         
-        indian_emoji = get_indian_emoji()
-        
-        try:
-            msg = await app.send_message(
-                original_chat_id,
-                f"{indian_emoji} ᴀᴜᴛᴏᴘʟᴀʏ → ꜰᴇᴛᴄʜɪɴɢ ɴᴇxᴛ ꜱᴏɴɢ...........",
-            )
-        except Exception:
-            return False
+        await app.send_message(original_chat_id, "🔄 ᴀᴜᴛᴏᴘʟᴀʏ → ꜰᴇᴛᴄʜɪɴɢ ɴᴇxᴛ...")
         
         if not last_title:
             queue = db.get(chat_id)
-            if queue and len(queue) > 0:
-                last_title = queue[0].get("title", "latest hindi song")
-            else:
-                last_title = "latest hindi song"
+            last_title = queue[0].get("title", "song") if queue else "song"
         
-        lang = detect_lang(last_title)
-        mood = detect_mood(last_title)
-        artist = extract_artist(last_title)
-        movie = detect_movie(last_title)
+        # Pure dynamic extraction
+        core_words = extract_core_words(last_title)
+        primary_id = get_primary_identifier(last_title, core_words)
+        secondary_id = get_secondary_identifier(last_title, core_words)
         
-        queries = build_smart_queries(last_title, artist, movie, lang, mood)
+        queries = build_queries(last_title, primary_id, secondary_id, core_words)
+        vid, info = await find_song(chat_id, queries, last_title, last_vidid, primary_id, secondary_id)
         
-        vidid, details = await get_best_song(
-            chat_id, queries, last_title, last_vidid, artist, movie, mood, lang
-        )
+        # Fallbacks
+        if not vid and primary_id:
+            info, vid = await yt.track(f"{primary_id} songs")
+        if not vid and secondary_id:
+            info, vid = await yt.track(f"{secondary_id} songs")
+        if not vid:
+            info, vid = await yt.track("popular songs")
+        if not vid:
+            info, vid = await yt.track("trending")
         
-        # FALLBACK CHAIN
-        if not vidid and movie:
-            details, vidid = await yt.track(f"{movie} songs")
-            if vidid == last_vidid:
-                vidid = None
-        
-        if not vidid and artist:
-            details, vidid = await yt.track(f"{artist} hits")
-            if vidid == last_vidid:
-                vidid = None
-        
-        if not vidid and lang:
-            details, vidid = await yt.track(f"{lang} trending songs")
-            if vidid == last_vidid:
-                vidid = None
-        
-        if not vidid:
-            details, vidid = await yt.track("latest bollywood hits 2025")
-        
-        if not vidid:
-            details, vidid = await yt.track("hindi songs 2025")
-        
-        if not vidid:
-            details, vidid = await yt.track("bollywood songs")
-        
-        if not vidid:
-            try:
-                await msg.edit_text("❌ ɴᴏ ꜱᴏɴɢ ꜰᴏᴜɴᴅ")
-            except Exception:
-                pass
+        if not vid:
             return False
         
-        new_title = details.get("title", "") if details else ""
-        await add_recent(chat_id, vidid, new_title)
-        
-        link = f"https://youtube.com/watch?v={vidid}"
-        
-        try:
-            thumb = details.get("thumb", "")
-            if not thumb or not thumb.startswith("http"):
-                thumb = await get_thumbnail_direct(vidid)
-        except Exception:
-            thumb = await get_thumbnail_direct(vidid)
-        
-        language = await get_lang(chat_id)
-        _ = get_string(language)
+        await add_recent(chat_id, vid, info.get("title", ""))
         
         await stream(
-            _,
-            msg,
+            get_string(await get_lang(chat_id)),
+            None,
             app.id,
             {
-                "link": link,
-                "vidid": vidid,
-                "title": details.get("title", "🇮🇳 ꜱɪᴍɪʟᴀʀ ɪɴᴅɪᴀɴ ꜱᴏɴɢ"),
-                "duration_min": details.get("duration_min", "00:00"),
-                "thumb": thumb,
+                "link": f"https://youtube.com/watch?v={vid}",
+                "vidid": vid,
+                "title": info.get("title", "🎵 ꜱᴏɴɢ"),
+                "duration_min": info.get("duration_min", "00:00"),
+                "thumb": await get_thumbnail(vid),
             },
             chat_id,
             "🔁 ᴀᴜᴛᴏᴘʟᴀʏ",
@@ -569,16 +411,9 @@ async def auto_play_next(
             video=False,
             streamtype="youtube",
         )
-        
-        try:
-            await msg.delete()
-        except Exception:
-            pass
-        
         return True
         
     except Exception:
         return False
-    
     finally:
         AUTO_PLAYING.pop(chat_id, None)
