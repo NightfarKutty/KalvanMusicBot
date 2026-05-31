@@ -1,451 +1,547 @@
-"""
-autoplay.py — VishalMusic Autoplay System
-==========================================
-
-Search method: py_yt.VideosSearch (limit=10)
-  - Already installed and used throughout this bot (Youtube.py)
-  - Returns 10 results per query → plenty of options to filter
-  - Works reliably with the Shruti API download system
-
-Download: unchanged — stream() → YouTube.download() → Shruti API (same as normal play)
-
-Filters applied to every candidate:
-  • Duration: 1:30 – 8:00 min (no shorts, no 2-3 hour albums/podcasts)
-  • No karaoke / live concert / jukebox / instrumental / mashup / slowed etc.
-  • Same language as current song (Hindi→Hindi, Punjabi→Punjabi, Tamil→Tamil)
-  • Not played in the last 2 hours (per-chat RECENT history)
-"""
-
 import asyncio
 import random
 import re
 import time
-from typing import Dict, List, Optional, Tuple
 
 import aiohttp
-from py_yt import VideosSearch
 
 from VISHALMUSIC import app
 from VISHALMUSIC.core.mongo import mongodb
 from VISHALMUSIC.misc import db
 from VISHALMUSIC.platforms.Youtube import YouTubeAPI
 
-yt           = YouTubeAPI()
-_autoplay_db = mongodb.autoplay
+yt = YouTubeAPI()
+autoplay_db = mongodb.autoplay
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  PROTECTION SYSTEM
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🔒  LOCK — prevents double-play if StreamEnded fires twice
-#     Timestamp-based: never hangs after a bot crash/restart.
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+RECENT = {}
+RECENT_TITLES = {}
 
-_LOCK: Dict[int, float] = {}
+# FIX 3: Timestamp-based lock — boolean lock hangs forever after bot crash/restart.
+# Store the timestamp of when lock was acquired; if > 60s old, consider it expired.
+AUTO_PLAYING = {}  # chat_id -> float (timestamp) or 0
+
 _LOCK_TTL = 60  # seconds
 
 
-def _lock_acquire(chat_id: int) -> bool:
-    ts = _LOCK.get(chat_id, 0)
-    if ts and (time.time() - ts) < _LOCK_TTL:
+def _is_locked(chat_id: int) -> bool:
+    ts = AUTO_PLAYING.get(chat_id, 0)
+    if not ts:
         return False
-    _LOCK[chat_id] = time.time()
+    return (time.time() - ts) < _LOCK_TTL
+
+
+def _acquire_lock(chat_id: int) -> bool:
+    if _is_locked(chat_id):
+        return False
+    AUTO_PLAYING[chat_id] = time.time()
     return True
 
 
-def _lock_release(chat_id: int) -> None:
-    _LOCK.pop(chat_id, None)
+def _release_lock(chat_id: int) -> None:
+    AUTO_PLAYING.pop(chat_id, None)
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🕒  RECENT HISTORY — per-chat, 2-hour window
-#     Same song never repeats within 2 hours.
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🇮🇳 INDIAN LANGUAGE DATABASE
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-_RECENT: Dict[int, Dict[str, float]] = {}
-_RECENT_TTL = 7200  # 2 hours
-
-
-def _mark_recent(chat_id: int, vidid: str) -> None:
-    now    = time.time()
-    bucket = _RECENT.setdefault(chat_id, {})
-    # Prune expired entries
-    _RECENT[chat_id] = {v: t for v, t in bucket.items() if now - t < _RECENT_TTL}
-    _RECENT[chat_id][vidid] = now
-
-
-def _is_recent(chat_id: int, vidid: str) -> bool:
-    ts = _RECENT.get(chat_id, {}).get(vidid, 0)
-    return bool(ts) and (time.time() - ts) < _RECENT_TTL
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# ⏱  DURATION FILTER
-#     VideosSearch returns duration as a string: "3:45" or "1:02:30"
-#     We accept: 1:30 min (90s) to 8:00 min (480s)
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-_MIN_SEC = 90
-_MAX_SEC = 480
-
-
-def _parse_dur(dur_str: str) -> int:
-    """'3:45' → 225, '1:02:30' → 3750, bad string → 0"""
-    try:
-        parts = [int(p) for p in str(dur_str).strip().split(":")]
-        if len(parts) == 2:
-            return parts[0] * 60 + parts[1]
-        if len(parts) == 3:
-            return parts[0] * 3600 + parts[1] * 60 + parts[2]
-    except Exception:
-        pass
-    return 0
-
-
-def _dur_ok(dur_str: str) -> bool:
-    sec = _parse_dur(dur_str)
-    if sec == 0:
-        return True   # duration unknown → don't reject; let it through
-    return _MIN_SEC <= sec <= _MAX_SEC
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🚫  BAD-CONTENT KEYWORDS
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-_BAD = {
-    "slowed", "reverb", "8d audio", "lofi", "lo-fi", "lo fi",
-    "live concert", "live performance", "live at ", "live show",
-    "karaoke", "instrumental", "bass boosted", "sped up", "nightcore",
-    "cover by", "reaction", "interview", "behind the scenes",
-    "#shorts", "podcast", "lecture", "full album", "full movie",
-    "jukebox", "mashup", "medley", "nonstop", "non stop",
-    "2 hours", "3 hours", "4 hours",
+LANG_DB = {
+    "hindi": ["hindi", "bollywood", "arijit", "jubin", "atif", "hindi song", "bollywood song"],
+    "punjabi": ["punjabi", "sidhu", "diljit", "karan", "ammy", "jatt", "punjabi song"],
+    "english": ["english", "ed sheeran", "taylor swift", "justin bieber", "english song"],
+    "bhojpuri": ["bhojpuri", "pawan singh", "khesari", "bhojpuri song"],
+    "haryanvi": ["haryanvi", "khasa", "masoom sharma", "haryanvi song"],
+    "gujarati": ["gujarati", "gujju", "garba", "gujarati song"],
+    "tamil": ["tamil", "tamil song", "kollywood", "anirudh", "tamil cinema"],
+    "telugu": ["telugu", "telugu song", "tollywood", "devi sri", "telugu cinema"],
+    "bengali": ["bengali", "bangla", "bengali song"],
+    "marathi": ["marathi", "marathi song", "maharashtra"],
+    "urdu": ["urdu", "urdu song", "pakistani", "nusrat"],
 }
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🎭 MOOD DATABASE (Indian Context)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-def _title_ok(title: str) -> bool:
-    t = title.lower()
-    return not any(b in t for b in _BAD)
+MOOD_DB = {
+    "sad": ["sad", "broken", "heart", "bewafa", "alone", "cry", "dard", "tanha", "rula", "sad song"],
+    "love": ["love", "romantic", "ishq", "pyaar", "mohabbat", "love song", "romantic song", "pyar", "ishq wala"],
+    "party": ["party", "dj", "dance", "club", "bhangra", "party song", "dj song", "dance song", "masala"],
+    "wedding": ["wedding", "shaadi", "marriage", "dulhan", "mehendi", "sangeet"],
+    "devotional": ["devotional", "bhajan", "aarti", "mantra", "shiva", "krishna", "ram", "ganesha", "hanuman"],
+    "oldschool": ["old", "classic", "90s", "80s", "kishore", "lata", "rafi", "old song", "retro", "purana"],
+    "punjabi": ["punjabi", "sidhu", "diljit", "bhangra", "jatt", "punjabi song"],
+    "sufi": ["sufi", "qawwali", "nusrat", "kalam", "sufiana"],
+}
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🎤 INDIAN ARTIST DATABASE
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🌐  LANGUAGE DETECTION
-#     Step 1: Unicode script ranges (Devanagari / Gurmukhi / Tamil / Telugu …)
-#     Step 2: Known artist/keyword hints in Roman script
-#     Step 3: Pure-Latin with no Indian hints → English
-#     Default: "hindi"
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ARTIST_DB = {
+    "arijit singh": ["arijit", "arijit singh", "arijit song", "arijit new"],
+    "atif aslam": ["atif", "atif aslam", "atif song"],
+    "sidhu moosewala": ["sidhu", "sidhu moosewala", "sidhu song"],
+    "diljit dosanjh": ["diljit", "diljit dosanjh", "diljit song"],
+    "karan aujla": ["karan", "karan aujla", "karan song"],
+    "jubin nautiyal": ["jubin", "jubin nautiyal", "jubin song"],
+    "badshah": ["badshah", "badshah song", "badshah new"],
+    "yo yo honey singh": ["honey singh", "yo yo", "brown rang", "yo yo honey singh"],
+    "neha kakkar": ["neha kakkar", "neha song", "neha new"],
+    "shreya ghoshal": ["shreya", "shreya ghoshal", "shreya song"],
+    "sonu nigam": ["sonu", "sonu nigam", "sonu song"],
+    "alka yagnik": ["alka", "alka yagnik", "alka song"],
+    "udit narayan": ["udit", "udit narayan", "udit song"],
+    "kumar sanu": ["kumar sanu", "kumar song"],
+    "lata mangeshkar": ["lata", "lata mangeshkar", "lata song"],
+    "kishore kumar": ["kishore", "kishore kumar", "kishore song"],
+    "mohammad rafi": ["rafi", "mohammad rafi", "rafi song"],
+    "ap dhillon": ["ap dhillon", "ap", "dhillon", "ap song"],
+    "gurinder gill": ["gurinder gill", "gill", "gurinder song"],
+}
 
-_RE_DEVA    = re.compile(r"[\u0900-\u097F]")
-_RE_GURM    = re.compile(r"[\u0A00-\u0A7F]")
-_RE_TAMIL   = re.compile(r"[\u0B80-\u0BFF]")
-_RE_TELUGU  = re.compile(r"[\u0C00-\u0C7F]")
-_RE_BENGALI = re.compile(r"[\u0980-\u09FF]")
-_RE_LATIN   = re.compile(r"^[A-Za-z0-9 .,'\-!&()\[\]]+$")
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🎬 INDIAN MOVIE DATABASE
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-_KW: List[Tuple[str, List[str]]] = [
-    ("punjabi",  ["punjabi", "sidhu moosewala", "diljit", "karan aujla",
-                  "ammy virk", "ap dhillon", "bhangra", "jatt", "babbu maan",
-                  "gurnam bhullar", "satinder sartaaj"]),
-    ("haryanvi", ["haryanvi", "khasa aala chahar", "masoom sharma", "renuka panwar"]),
-    ("bhojpuri", ["bhojpuri", "pawan singh", "khesari lal", "nirahua"]),
-    ("hindi",    ["hindi", "bollywood", "arijit singh", "jubin nautiyal",
-                  "atif aslam", "neha kakkar", "shreya ghoshal", "sonu nigam",
-                  "kishore kumar", "lata mangeshkar", "badshah",
-                  "yo yo honey singh", "b praak", "darshan raval",
-                  "armaan malik", "vishal mishra", "shankar mahadevan"]),
-    ("tamil",    ["tamil", "kollywood", "anirudh", "sid sriram", "harris jayaraj"]),
-    ("telugu",   ["telugu", "tollywood", "devi sri prasad", "thaman s"]),
-    ("bengali",  ["bengali", "bangla"]),
+MOVIE_DB = {
+    "animal": ["animal", "animal song", "animal movie"],
+    "kabir singh": ["kabir singh", "kabir movie"],
+    "aashiqui 2": ["aashiqui", "aashiqui 2", "aashiqui song"],
+    "shershaah": ["shershaah", "shershaah song", "shershaah movie"],
+    "pushpa": ["pushpa", "pushpa song", "pushpa movie", "srivali"],
+    "kgf": ["kgf", "kgf song", "rocky bhai"],
+    "pathaan": ["pathaan", "pathaan song", "shah rukh"],
+    "jawan": ["jawan", "jawan song", "jawan movie"],
+    "dunki": ["dunki", "dunki song", "dunki movie"],
+    "gadar 2": ["gadar", "gadar 2", "gadar song"],
+    "rocky aur rani": ["rocky", "rani", "rocky aur rani", "kjo"],
+    "tu jhoothi main makkaar": ["tu jhoothi", "tjmm", "ranbir", "shraddha"],
+    "bhool bhulaiyaa 2": ["bhool bhulaiyaa", "bb2", "kartik aaryan"],
+    "brahmastra": ["brahmastra", "astra", "ranbir", "alia"],
+    "tanhaji": ["tanhaji", "ajay devgn", "tanhaji song"],
+    "chhichhore": ["chhichhore", "sushant", "chhichhore song"],
+}
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  TRENDING KEYWORDS (Indian)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TRENDING_STYLES = [
+    "hindi songs",
+    "punjabi songs",
+    "bollywood songs",
+    "Instagram trending",
+    "Love songs",
+    "sad songs",
 ]
 
-_INDIAN = {"hindi", "punjabi", "haryanvi", "bhojpuri", "urdu"}
+# FIX 1: Diverse fallback pool — random queries prevent same song every time.
+# Old code used a single hardcoded query "latest bollywood hits 2025" which
+# always returned the exact same #1 YouTube result.
+FALLBACK_POOL = [
+    "latest bollywood hits 2025",
+    "top hindi songs 2025",
+    "trending punjabi songs 2025",
+    "popular hindi songs playlist",
+    "new bollywood songs 2025",
+    "best hindi songs 2024",
+    "bollywood romantic hits",
+    "top 10 hindi songs",
+    "latest punjabi hits",
+    "india trending music 2025",
+    "best arijit singh songs",
+    "best jubin nautiyal songs",
+    "hindi love songs playlist",
+    "punjabi new songs 2025",
+    "bollywood party songs",
+    "sad hindi songs collection",
+    "old bollywood hits 90s",
+    "sufi songs hindi",
+    "new hindi songs march 2025",
+    "hindi songs for long drive",
+]
 
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🌍 DETECT LANGUAGE
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-def _detect_lang(title: str) -> str:
-    if _RE_DEVA.search(title):    return "hindi"
-    if _RE_GURM.search(title):    return "punjabi"
-    if _RE_TAMIL.search(title):   return "tamil"
-    if _RE_TELUGU.search(title):  return "telugu"
-    if _RE_BENGALI.search(title): return "bengali"
-    tl = title.lower()
-    for lang, kws in _KW:
-        if any(k in tl for k in kws):
+def detect_lang(title):
+    if not title:
+        return "hindi"
+    title = title.lower()
+    for lang, keys in LANG_DB.items():
+        if any(x in title for x in keys):
             return lang
-    if _RE_LATIN.match(title.strip()):
-        return "english"
     return "hindi"
 
 
-def _lang_ok(candidate: str, want: str) -> bool:
-    if not candidate.strip():
-        return True          # unknown → allow
-    got = _detect_lang(candidate)
-    if got == want:
-        return True
-    if want in _INDIAN and got in _INDIAN:
-        return True          # Hindi ↔ Punjabi ↔ Haryanvi mix is natural
-    return False
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🎭 DETECT MOOD
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def detect_mood(title):
+    if not title:
+        return "normal"
+    title = title.lower()
+    for mood, keys in MOOD_DB.items():
+        if any(x in title for x in keys):
+            return mood
+    return "normal"
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🔍  VIDEO SEARCH via py_yt.VideosSearch
-#     Same library already used in this bot's Youtube.py.
-#     limit=10 → 10 candidates per query → plenty to filter.
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🎤 DETECT ARTIST
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-async def _search(query: str, limit: int = 10) -> List[dict]:
-    """
-    Returns up to `limit` result dicts from py_yt.VideosSearch.
-    Each dict has at least: id, title, duration (str "M:SS"), isLive (bool).
-    Returns [] on any failure.
-    """
-    try:
-        data = await asyncio.wait_for(
-            VideosSearch(query, limit=limit).next(),
-            timeout=15,
-        )
-        return data.get("result") or []
-    except Exception:
-        return []
-
-
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🏗  QUERY BUILDER
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-_NOISE_RE = re.compile(
-    r"\b(official|video|lyrics|lyrical|audio|full|hd|hq|4k|"
-    r"song|music|new|latest|visualizer|teaser|promo)\b",
-    re.IGNORECASE,
-)
-
-_ARTIST_MAP = {
-    "arijit":       "arijit singh",
-    "jubin":        "jubin nautiyal",
-    "atif":         "atif aslam",
-    "sidhu":        "sidhu moosewala",
-    "diljit":       "diljit dosanjh",
-    "karan aujla":  "karan aujla",
-    "ammy":         "ammy virk",
-    "badshah":      "badshah",
-    "neha":         "neha kakkar",
-    "shreya":       "shreya ghoshal",
-    "honey singh":  "yo yo honey singh",
-    "ap dhillon":   "ap dhillon",
-    "b praak":      "b praak",
-    "darshan":      "darshan raval",
-    "armaan":       "armaan malik",
-    "anirudh":      "anirudh ravichander",
-    "vishal":       "vishal mishra",
-}
-
-_POOL: Dict[str, List[str]] = {
-    "hindi": [
-        "trending hindi songs 2024",
-        "latest bollywood hits",
-        "best arijit singh songs",
-        "best jubin nautiyal songs",
-        "hindi love songs",
-        "bollywood party songs",
-        "sad hindi songs",
-        "atif aslam hindi songs",
-        "new bollywood songs",
-        "hit hindi songs",
-        "popular bollywood songs",
-        "romantic hindi songs",
-    ],
-    "punjabi": [
-        "trending punjabi songs 2024",
-        "diljit dosanjh best songs",
-        "karan aujla songs",
-        "new punjabi songs",
-        "punjabi love songs",
-        "ap dhillon songs",
-        "top punjabi songs",
-        "ammy virk songs",
-    ],
-    "english": [
-        "trending english pop songs 2024",
-        "top english hits",
-        "popular english songs",
-        "best pop songs 2024",
-        "new english songs",
-        "top billboard songs",
-    ],
-    "tamil": [
-        "trending tamil songs 2024",
-        "anirudh ravichander songs",
-        "new kollywood songs",
-        "best tamil songs",
-        "sid sriram songs",
-    ],
-    "telugu": [
-        "trending telugu songs 2024",
-        "tollywood hits 2024",
-        "new telugu songs",
-        "best telugu songs",
-    ],
-    "bhojpuri": [
-        "trending bhojpuri songs",
-        "pawan singh songs",
-        "khesari lal songs",
-        "bhojpuri hits",
-    ],
-    "haryanvi": [
-        "trending haryanvi songs",
-        "khasa aala chahar songs",
-        "haryanvi hits",
-    ],
-    "bengali": [
-        "trending bengali songs",
-        "bangla hits",
-        "popular bengali songs",
-    ],
-}
-
-
-def _clean(title: str) -> str:
-    t = _NOISE_RE.sub("", title)
-    for sep in (" - ", " | ", " — ", " ft.", " feat.", " Ft."):
-        if sep in t:
-            t = t.split(sep)[0]
-            break
-    t = re.sub(r"[\(\[\{][^\)\]\}]{0,60}[\)\]\}]", "", t)
-    return re.sub(r"\s+", " ", t).strip()
-
-
-def _artist(title: str) -> str:
-    tl = title.lower()
-    for key, full in _ARTIST_MAP.items():
-        if key in tl:
-            return full
+def extract_artist(title):
+    if not title:
+        return ""
+    title_lower = title.lower()
+    for artist, keys in ARTIST_DB.items():
+        if any(x in title_lower for x in keys):
+            return artist
+    parts = re.split(r"[-|(]", title)
+    if len(parts) > 1:
+        candidate = parts[0].strip()
+        if len(candidate) < 30:
+            return candidate
     return ""
 
 
-def _queries(title: str, lang: str) -> List[str]:
-    clean  = _clean(title)
-    ar     = _artist(title)
-    pool   = _POOL.get(lang, _POOL["hindi"]).copy()
-    random.shuffle(pool)   # vary the generic pool each session
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🎬 DETECT MOVIE
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    qs: List[str] = []
-    if ar:
-        qs.append(f"{ar} best songs")
-        qs.append(f"{ar} popular songs")
-    if clean and len(clean) > 3:
-        qs.append(f"songs like {clean[:45]}")
-    qs.extend(pool)
-    return qs
+def detect_movie(title):
+    if not title:
+        return ""
+    title = title.lower()
+    for movie, keys in MOVIE_DB.items():
+        if any(x in title for x in keys):
+            return movie
+    return ""
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🎯  CANDIDATE PICKER
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🔤 TITLE NORMALIZER
+# Problem: "Diwaniyat" vs "Diwaniyat - AP Dhillon" vs "Diwaniyat Lyrics"
+# — different formats, same song. Two-step approach:
+# Step 1: Split on " - " / " | " separators to drop artist suffix
+# Step 2: Strip bracket content and noise words
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-def _pick(
-    results: List[dict],
-    chat_id: int,
-    last_vidid: str,
-    want_lang: str,
-    strict_lang: bool = True,
-) -> Optional[str]:
-    """Return the first video ID from results that passes all filters."""
-    for r in results:
-        vid = r.get("id", "")
-        if not vid:
-            continue
-        if vid == last_vidid:
-            continue
-        if _is_recent(chat_id, vid):
-            continue
-        if r.get("isLive"):
-            continue
+def normalize_title(title: str) -> str:
+    if not title:
+        return ""
+    t = title.lower().strip()
 
-        title = r.get("title") or ""
-        if not _title_ok(title):
-            continue
+    for sep in [" - ", " | ", " — ", " ft ", " feat "]:
+        if sep in t:
+            t = t.split(sep)[0].strip()
+            break
 
-        dur = r.get("duration") or ""
-        if not _dur_ok(dur):
-            continue
+    t = re.sub(r"[\(\[\{][^\)\]\}]*[\)\]\}]", "", t)
 
-        if strict_lang and title and not _lang_ok(title, want_lang):
-            continue
+    noise = [
+        "official", "video", "music", "audio", "lyrics", "lyrical",
+        "lyric", "full", "hd", "hq", "4k", "song", "new", "latest",
+        "visualizer", "teaser", "promo",
+    ]
+    for w in noise:
+        t = re.sub(rf"\b{w}\b", "", t)
 
-        return vid
-    return None
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🔎  ORCHESTRATOR — runs queries until a song is found
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-async def _find_next(
-    chat_id: int,
-    title: str,
-    last_vidid: str,
-    lang: str,
-) -> Optional[str]:
-    """
-    Try each query with 10 results.
-    Pass 1: language enforced.
-    Pass 2: language relaxed (so autoplay never goes completely silent).
-    """
-    qs = _queries(title, lang)
-
-    # Pass 1 — same language required
-    for q in qs:
-        results = await _search(q, limit=10)
-        if not results:
-            continue
-        vid = _pick(results, chat_id, last_vidid, lang, strict_lang=True)
-        if vid:
-            return vid
-
-    # Pass 2 — any language (last resort, better than nothing)
-    for q in qs[:5]:
-        results = await _search(q, limit=10)
-        if not results:
-            continue
-        vid = _pick(results, chat_id, last_vidid, lang, strict_lang=False)
-        if vid:
-            return vid
-
-    return None
+def _same_song(stored: str, candidate: str) -> bool:
+    if not stored or not candidate:
+        return False
+    if len(stored) < 4 or len(candidate) < 4:
+        return False
+    short = stored if len(stored) <= len(candidate) else candidate
+    long  = candidate if len(stored) <= len(candidate) else stored
+    return long.startswith(short) or short in long
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🖼  THUMBNAIL HELPER
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🔁 REPEAT CHECK (vidid + fuzzy title)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-async def _thumb(vidid: str, preferred: str = "") -> str:
-    if preferred and preferred.startswith("http"):
-        return preferred
-    for url in [
-        f"https://img.youtube.com/vi/{vidid}/maxresdefault.jpg",
-        f"https://img.youtube.com/vi/{vidid}/hqdefault.jpg",
-        f"https://img.youtube.com/vi/{vidid}/mqdefault.jpg",
-    ]:
+async def is_repeat(chat_id, vidid, title: str = "") -> bool:
+    current = time.time()
+
+    if chat_id not in RECENT:
+        RECENT[chat_id] = []
+    RECENT[chat_id] = [(v, t) for v, t in RECENT[chat_id] if current - t < 7200]
+    if vidid in [v for v, _ in RECENT[chat_id]]:
+        return True
+
+    if title:
+        norm = normalize_title(title)
+        if norm and len(norm) >= 4:
+            if chat_id not in RECENT_TITLES:
+                RECENT_TITLES[chat_id] = []
+            RECENT_TITLES[chat_id] = [
+                (n, t) for n, t in RECENT_TITLES[chat_id] if current - t < 7200
+            ]
+            for stored_norm, _ in RECENT_TITLES[chat_id]:
+                if _same_song(stored_norm, norm):
+                    return True
+
+    return False
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ➕ ADD RECENT SONG
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+async def add_recent(chat_id, vidid, title: str = "") -> None:
+    if not vidid:
+        return
+    current = time.time()
+
+    if chat_id not in RECENT:
+        RECENT[chat_id] = []
+    RECENT[chat_id].append((vidid, current))
+    if len(RECENT[chat_id]) > 50:
+        RECENT[chat_id] = RECENT[chat_id][-50:]
+
+    if title:
+        norm = normalize_title(title)
+        if norm and len(norm) >= 4:
+            if chat_id not in RECENT_TITLES:
+                RECENT_TITLES[chat_id] = []
+            RECENT_TITLES[chat_id].append((norm, current))
+            if len(RECENT_TITLES[chat_id]) > 50:
+                RECENT_TITLES[chat_id] = RECENT_TITLES[chat_id][-50:]
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  SMART QUERY BUILDER (Indian Focus)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def build_smart_queries(title, artist, movie, lang, mood):
+    queries = []
+
+    clean_title = re.sub(
+        r"official|video|lyrics|lyrical|hd|4k|music|song|audio|full|hq",
+        "",
+        title,
+        flags=re.IGNORECASE,
+    ).strip()
+
+    queries.append(clean_title)
+    queries.append(f"{clean_title} song")
+    queries.append(f"{clean_title} official")
+    queries.append(f"{clean_title} lyrics")
+
+    if artist:
+        queries.append(f"{artist} songs")
+        queries.append(f"{artist} hits")
+        queries.append(f"{artist} best songs")
+        if movie:
+            queries.append(f"{artist} {movie} song")
+        if lang:
+            queries.append(f"{artist} {lang} songs")
+
+    if movie:
+        queries.append(f"{movie} songs")
+        queries.append(f"{movie} all songs")
+        queries.append(f"{movie} jukebox")
+        queries.append(f"{movie} playlist")
+
+    if mood == "sad":
+        queries += ["sad hindi songs", "heartbreak songs hindi", "bewafa songs"]
+    elif mood == "love":
+        queries += ["romantic hindi songs", "love songs bollywood", "ishq wala song"]
+    elif mood == "party":
+        queries += ["party punjabi songs", "dj remix hindi", "dance songs bollywood"]
+    elif mood == "wedding":
+        queries += ["wedding songs hindi", "shaadi ke gane"]
+    elif mood == "devotional":
+        queries += ["bhajan", "aarti songs", "hanuman chalisa"]
+    elif mood == "oldschool":
+        queries += ["90s hindi songs", "old bollywood songs", "retro hindi songs"]
+    elif mood == "sufi":
+        queries += ["sufi songs hindi", "qawwali hits"]
+
+    if lang == "hindi":
+        queries += ["latest bollywood hits", "trending hindi songs 2025"]
+    elif lang == "punjabi":
+        queries += ["latest punjabi songs 2025", "punjabi hits"]
+    elif lang == "bhojpuri":
+        queries.append("bhojpuri hits")
+    elif lang == "haryanvi":
+        queries.append("haryanvi songs 2025")
+    elif lang == "gujarati":
+        queries.append("gujarati garba songs")
+    elif lang == "tamil":
+        queries.append("tamil hits")
+    elif lang == "telugu":
+        queries.append("telugu hits")
+    elif lang == "bengali":
+        queries.append("bengali songs")
+    elif lang == "marathi":
+        queries.append("marathi songs")
+    elif lang == "urdu":
+        queries.append("urdu songs")
+
+    if len(queries) < 5:
+        queries.extend(TRENDING_STYLES)
+
+    bad_words = [
+        "slowed", "reverb", "lofi", "8d", "live", "mix", "dj remix",
+        "bass boosted", "cover", "karaoke", "instrumental", "sped up",
+    ]
+
+    final = []
+    for q in queries:
+        q_lower = q.lower()
+        if not any(bad in q_lower for bad in bad_words):
+            if q not in final and len(q) > 3:
+                final.append(q)
+
+    return final[:20]
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🎵 BEST SONG FINDER
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+async def get_best_song(chat_id, queries, last_title, last_vidid, artist, movie, mood, lang):
+    candidates = []
+    original_words = last_title.lower().split()
+
+    for q in queries:
         try:
-            async with aiohttp.ClientSession() as s:
-                async with s.get(url, timeout=aiohttp.ClientTimeout(total=5)) as r:
-                    if r.status == 200:
-                        return url
+            details, vidid = await yt.track(q)
+            if not vidid:
+                continue
+
+            if vidid == last_vidid:
+                continue
+
+            title = details.get("title", "").lower()
+            duration = details.get("duration_min", "0:00") or "0:00"
+
+            bad_words = [
+                "slowed", "reverb", "8d", "lofi", "live", "mix", "dj remix",
+                "bass boosted", "cover", "karaoke", "instrumental", "sped up",
+            ]
+            if any(x in title for x in bad_words):
+                continue
+
+            if title.strip() == last_title.lower().strip():
+                continue
+
+            try:
+                mins = int(duration.split(":")[0])
+                if mins < 2 or mins > 10:
+                    continue
+            except Exception:
+                pass
+
+            if await is_repeat(chat_id, vidid, details.get("title", "")):
+                continue
+
+            score = 0
+
+            match_count = sum(1 for w in original_words[:5] if w in title and len(w) > 3)
+            score += match_count * 15
+
+            if artist and artist.lower() in title:
+                score += 50
+                if title.startswith(artist.lower()):
+                    score += 30
+
+            if movie and movie.lower() in title:
+                score += 45
+
+            if any(x in title for x in LANG_DB.get(lang, [])):
+                score += 20
+
+            if mood != "normal":
+                mood_keywords = MOOD_DB.get(mood, [])
+                if any(x in title for x in mood_keywords):
+                    score += 15
+
+            score += 50
+
+            # FIX 2: Add small random jitter so equal-score songs don't always
+            # resolve to the same top result. Without jitter, the same song
+            # always wins ties since list order is deterministic per query.
+            score += random.randint(0, 10)
+
+            candidates.append((score, vidid, details))
+
         except Exception:
             continue
-    return f"https://img.youtube.com/vi/{vidid}/mqdefault.jpg"
+
+        await asyncio.sleep(0.2)
+
+    # FIX 2: Shuffle before sort so ties are broken randomly, not by query order
+    random.shuffle(candidates)
+    candidates.sort(key=lambda x: x[0], reverse=True)
+
+    if candidates:
+        best = candidates[0]
+        return best[1], best[2]
+
+    return None, None
 
 
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-# 🚀  MAIN ENTRY POINT — called from call.py → play()
-# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🖼 THUMBNAIL
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-_EMOJIS = [
-    "🇮🇳","🎧","❤️","🎶","✨","🎤","💖","🎵","🔥","💫",
-    "🎸","💕","🪩","🌙","💘","🥰","🎼","⚡","💞","🦋",
-    "💜","🌸","🕺","💃","💝","🌈","❣️","🪘","💗","🎹",
-]
+async def get_thumbnail_direct(video_id):
+    urls = [
+        f"https://img.youtube.com/vi/{video_id}/maxresdefault.jpg",
+        f"https://img.youtube.com/vi/{video_id}/hqdefault.jpg",
+        f"https://img.youtube.com/vi/{video_id}/mqdefault.jpg",
+    ]
+    async with aiohttp.ClientSession() as session:
+        for url in urls:
+            try:
+                async with session.get(url) as resp:
+                    if resp.status == 200:
+                        return url
+            except Exception:
+                continue
+    return urls[-1]
 
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🇮🇳 INDIAN EMOJI
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def get_indian_emoji():
+    emojis = ["🇮🇳","🎧","❤️","🎶","✨","🎤","💖","🎵","🔥","💫","🎸","💕","🪩","🌙","💘","🥰","🎼","⚡","💞","🦋","🎶","💜","🎤","🌸","🕺","💃","💝","🎧","🌈","❣️","🪘","💗","✨","🔥"]
+    return random.choice(emojis)
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+# 🚀 MAIN AUTOPLAY FUNCTION
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#
+# FIX 1: Fallback chain now uses is_repeat() — not just vidid == last_vidid.
+#         Old code: only blocked the immediately previous song.
+#         New code: blocks ANY song played in last 2 hours.
+#
+# FIX 2: Random jitter added to scoring + FALLBACK_POOL is shuffled.
+#         Old code: same query = same #1 YouTube result = same song every time.
+#         New code: random pool + jitter ensures variety even in fallbacks.
+#
+# FIX 3: AUTO_PLAYING uses timestamp instead of boolean.
+#         Old code: bot crash/restart left lock = True → autoplay stuck forever.
+#         New code: lock expires after 60s automatically.
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 async def auto_play_next(
     chat_id: int,
@@ -453,89 +549,118 @@ async def auto_play_next(
     last_title: str = "",
     last_vidid: str = "",
 ) -> bool:
-    """
-    Play the next song when the queue empties and autoplay is ON.
-    Returns True if a new song started, False otherwise.
-    """
-    from strings import get_string
     from VISHALMUSIC.utils.database import get_lang
     from VISHALMUSIC.utils.stream.stream import stream
+    from strings import get_string
 
-    # ── Prevent double-trigger ───────────────────────────────────────────────
-    if not _lock_acquire(chat_id):
+    # FIX 3: Timestamp-based lock — won't hang after bot restart
+    if not _acquire_lock(chat_id):
         return False
 
     try:
-        # ── Autoplay ON? ─────────────────────────────────────────────────────
-        data = await _autoplay_db.find_one({"chat_id": chat_id})
+        data = await autoplay_db.find_one({"chat_id": chat_id})
         if not data or not data.get("status"):
             return False
 
-        # ── Mark finished song in history BEFORE searching ───────────────────
+        # Mark last played song as recent BEFORE searching
         if last_vidid:
-            _mark_recent(chat_id, last_vidid)
+            await add_recent(chat_id, last_vidid, last_title)
 
-        # ── "Searching…" notice ──────────────────────────────────────────────
+        indian_emoji = get_indian_emoji()
+
         try:
-            notice = await app.send_message(
+            msg = await app.send_message(
                 original_chat_id,
-                f"{random.choice(_EMOJIS)} ᴀᴜᴛᴏᴘʟᴀʏ → ꜰᴇᴛᴄʜɪɴɢ ɴᴇxᴛ ꜱᴏɴɢ...",
+                f"{indian_emoji} ᴀᴜᴛᴏᴘʟᴀʏ → ꜰᴇᴛᴄʜɪɴɢ ɴᴇxᴛ ꜱᴏɴɢ...........",
             )
         except Exception:
             return False
 
-        # ── Resolve title ────────────────────────────────────────────────────
         if not last_title:
-            q = db.get(chat_id)
-            last_title = (q[0].get("title", "") if q else "") or "trending hindi songs"
+            queue = db.get(chat_id)
+            if queue and len(queue) > 0:
+                last_title = queue[0].get("title", "latest hindi song")
+            else:
+                last_title = "latest hindi song"
 
-        # ── Detect language of the song that just ended ──────────────────────
-        song_lang = _detect_lang(last_title)
+        lang = detect_lang(last_title)
+        mood = detect_mood(last_title)
+        artist = extract_artist(last_title)
+        movie = detect_movie(last_title)
 
-        # ── Find next song ───────────────────────────────────────────────────
-        next_vid = await _find_next(chat_id, last_title, last_vidid, song_lang)
+        queries = build_smart_queries(last_title, artist, movie, lang, mood)
 
-        if not next_vid:
+        vidid, details = await get_best_song(
+            chat_id, queries, last_title, last_vidid, artist, movie, mood, lang
+        )
+
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+        # FIX 1: Fallback chain — use is_repeat() not just == last_vidid
+        # Old code only blocked the one song that just played.
+        # New code blocks any song heard in the last 2 hours.
+        # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+        if not vidid and movie:
+            d, v = await yt.track(f"{movie} all songs")
+            if v and not await is_repeat(chat_id, v, d.get("title", "") if d else ""):
+                vidid, details = v, d
+
+        if not vidid and artist:
+            d, v = await yt.track(f"{artist} hits")
+            if v and not await is_repeat(chat_id, v, d.get("title", "") if d else ""):
+                vidid, details = v, d
+
+        if not vidid and lang:
+            d, v = await yt.track(f"{lang} trending songs")
+            if v and not await is_repeat(chat_id, v, d.get("title", "") if d else ""):
+                vidid, details = v, d
+
+        # FIX 2: Randomized final fallback pool — shuffled so we never get
+        # the same #1 YouTube result from a hardcoded query every single time.
+        if not vidid:
+            pool = FALLBACK_POOL.copy()
+            random.shuffle(pool)
+            for fallback_q in pool:
+                try:
+                    d, v = await yt.track(fallback_q)
+                    if v and not await is_repeat(chat_id, v, d.get("title", "") if d else ""):
+                        vidid, details = v, d
+                        break
+                except Exception:
+                    continue
+
+        if not vidid:
             try:
-                await notice.edit_text("❌ ᴀᴜᴛᴏᴘʟᴀʏ: ɴᴏ ꜱᴜɪᴛᴀʙʟᴇ ꜱᴏɴɢ ꜰᴏᴜɴᴅ")
+                await msg.edit_text("❌ ɴᴏ ꜱᴏɴɢ ꜰᴏᴜɴᴅ")
             except Exception:
                 pass
             return False
 
-        # ── Mark it as recent so it doesn't repeat next time ────────────────
-        _mark_recent(chat_id, next_vid)
+        new_title = details.get("title", "") if details else ""
+        await add_recent(chat_id, vidid, new_title)
 
-        # ── Fetch full metadata via yt.track() ───────────────────────────────
-        yt_url = f"https://www.youtube.com/watch?v={next_vid}"
+        link = f"https://youtube.com/watch?v={vidid}"
+
         try:
-            details, _ = await yt.track(yt_url)
-            details["vidid"] = next_vid
+            thumb = details.get("thumb", "")
+            if not thumb or not thumb.startswith("http"):
+                thumb = await get_thumbnail_direct(vidid)
         except Exception:
-            # Minimal fallback — stream() will still work with basic info
-            details = {
-                "title":        "🎵 ᴀᴜᴛᴏᴘʟᴀʏ ꜱᴏɴɢ",
-                "link":         yt_url,
-                "vidid":        next_vid,
-                "duration_min": "0:00",
-                "thumb":        "",
-            }
+            thumb = await get_thumbnail_direct(vidid)
 
-        details["thumb"] = await _thumb(next_vid, details.get("thumb", ""))
-
-        # ── Call stream() — downloads via Shruti API (same as normal play) ───
         language = await get_lang(chat_id)
-        _  = get_string(language)
+        _ = get_string(language)
 
         await stream(
             _,
-            notice,
+            msg,
             app.id,
             {
-                "link":         f"https://youtube.com/watch?v={next_vid}",
-                "vidid":        next_vid,
-                "title":        details.get("title") or "🎵 ᴀᴜᴛᴏᴘʟᴀʏ ꜱᴏɴɢ",
-                "duration_min": details.get("duration_min") or "0:00",
-                "thumb":        details.get("thumb") or "",
+                "link": link,
+                "vidid": vidid,
+                "title": details.get("title", "🇮🇳 ꜱɪᴍɪʟᴀʀ ɪɴᴅɪᴀɴ ꜱᴏɴɢ"),
+                "duration_min": details.get("duration_min", "00:00"),
+                "thumb": thumb,
             },
             chat_id,
             "🔁 ᴀᴜᴛᴏᴘʟᴀʏ",
@@ -545,7 +670,7 @@ async def auto_play_next(
         )
 
         try:
-            await notice.delete()
+            await msg.delete()
         except Exception:
             pass
 
@@ -555,4 +680,5 @@ async def auto_play_next(
         return False
 
     finally:
-        _lock_release(chat_id)
+        # FIX 3: Always release the lock — even on exception or early return
+        _release_lock(chat_id)
