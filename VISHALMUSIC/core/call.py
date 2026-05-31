@@ -42,7 +42,7 @@ def dynamic_media_stream(path: str, video: bool = False, ffmpeg_params: str = No
     return MediaStream(
         audio_path=path,
         media_path=path,
-        audio_parameters=AudioQuality.MEDIUM if video else AudioQuality.STUDIO,
+        audio_parameters=AudioQuality.STUDIO,
         video_parameters=VideoQuality.HD_720p if video else VideoQuality.SD_360p,
         video_flags=(MediaStream.Flags.AUTO_DETECT if video else MediaStream.Flags.IGNORE),
         ffmpeg_parameters=ffmpeg_params,
@@ -287,6 +287,7 @@ class Call:
                                     popped.get("chat_id", chat_id),
                                     popped.get("title", ""),
                                     popped.get("vidid", ""),
+                                    video=(popped.get("streamtype") == "video"),
                                 )
 
                                 # Verify the stream actually started.
