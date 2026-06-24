@@ -120,7 +120,7 @@
   <img src="https://i.ibb.co/G4jcgxRv/x.jpg" width="180" alt="Kutty">
 </p>
 
-<h2 align="center"> ⎯⃨𓏲𝚲‌𖾘૰ꪳ꒖𖾝 𝚱𖽪𖾓᪳ᷱ᷵𖾓ᵧ″𝂱𓂃ؓ𝆺𝅥⃝ꪲꪳ🎀꫁ </h2>
+<h2 align="center"> ⎯⃨𓏲𝚲‌𖾘૰ꪳ꒖𖾝 кυтту″𝂱𓂃ؓ𝆺𝅥⃝ꪲꪳ🎀꫁ </h2>
 
 <p align="center">
   <img src="https://readme-typing-svg.demolab.com?font=Orbitron&size=22&pause=1000&color=FF004F&center=true&vCenter=true&width=500&lines=Telegram+Developer;Python+Programmer;Anime+Lover;Bot+Creator">
