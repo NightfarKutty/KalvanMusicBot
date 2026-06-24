@@ -116,6 +116,16 @@
     <img src="https://user-images.githubusercontent.com/73097560/115834477-dbab4500-a447-11eb-908a-139a6edaec5c.gif" />
   </p>
 
+<p align="center">
+  <a href="https://t.me/KuttyHacker">
+    <img src="https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white">
+  </a>
+
+  <a href="https://github.com/NightfarKutty">
+    <img src="https://img.shields.io/badge/GitHub-181717?style=for-the-badge&logo=github&logoColor=white">
+  </a>
+</p>
+
   ### 🚀 Advanced Performance
 
   - ⚡ Telegram Bot Delvping 
