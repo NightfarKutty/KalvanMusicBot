@@ -116,6 +116,16 @@
     <img src="https://user-images.githubusercontent.com/73097560/115834477-dbab4500-a447-11eb-908a-139a6edaec5c.gif" />
   </p>
 
+  <p align="center">
+  <img src="https://i.ibb.co/G4jcgxRv/x.jpg" width="180" alt="Kutty">
+</p>
+
+<h2 align="center"> ALONE KUTTY </h2>
+
+<p align="center">
+  <img src="https://readme-typing-svg.demolab.com?font=Orbitron&size=22&pause=1000&color=FF004F&center=true&vCenter=true&width=500&lines=Telegram+Developer;Python+Programmer;Anime+Lover;Bot+Creator">
+</p>
+
 <p align="center">
   <a href="https://t.me/KuttyHacker">
     <img src="https://img.shields.io/badge/Telegram-2CA5E0?style=for-the-badge&logo=telegram&logoColor=white">
