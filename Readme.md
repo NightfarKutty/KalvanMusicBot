@@ -1,6 +1,6 @@
 <!-- KALVAN MUSIC ANIMATED BANNER -->
   <p align="center">
-    <img src="https://raw.githubusercontent.com/NightfarKutty/KalvanMusicBot/main/banner.svg" alt="Kalvan Music Banner" width="900"/>
+    <img src="https://i.ibb.co/99fJX5qC/x.jpg" alt="Kalvan Music Banner" width="900"/>
   </p>
 
   <!-- ANIMATED FOOTER LINE -->
