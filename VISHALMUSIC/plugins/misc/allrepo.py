@@ -8,47 +8,35 @@ def chunk_string(text, chunk_size):
     return [text[i:i + chunk_size] for i in range(0, len(text), chunk_size)]
 
 
+repo_caption = """**
+🚀 ʀᴇᴩᴏ ᴀɴᴅ ᴅᴇᴘʟᴏʏ – 🚀
+
+➤ ᴅᴇᴘʟᴏʏ ᴇᴀsɪʟʏ ᴏɴ ʜᴇʀᴏᴋᴜ ᴡɪᴛʜᴏᴜᴛ ᴇʀʀᴏʀꜱ  
+➤ ɴᴏ ʜᴇʀᴏᴋᴜ ʙᴀɴ ɪꜱꜱᴜᴇ  
+➤ ɴᴏ ɪᴅ ʙᴀɴ ɪꜱꜱᴜᴇ   
+➤ ᴜɴʟɪᴍɪᴛᴇᴅ ᴅʏɴᴏꜱ  
+➤ ʀᴜɴ 24/7 ʟᴀɢ ꜰʀᴇᴇ
+
+ɪꜰ ʏᴏᴜ ꜰᴀᴄᴇ ᴀɴʏ ᴘʀᴏʙʟᴇᴍ, ꜱᴇɴᴅ ꜱꜱ ɪɴ ꜱᴜᴘᴘᴏʀᴛ
+**"""
+
 @app.on_message(filters.command("allrepo"))
-async def all_repo_command(client: Client, message: Message):
-    if len(message.command) < 2:
-        return await message.reply_text("❌ Please enter a GitHub username.\n\nExample: `/allrepo ItsMeVishal0`")
-
-    username = message.command[1].strip()
-
-    try:
-        repo_info = await get_all_repository_info(username)
-
-        if not repo_info:
-            return await message.reply_text("❌ No public repositories found or user does not exist.")
-
-        chunks = chunk_string(repo_info, 4000)
-
-        for chunk in chunks:
-            await message.reply_text(chunk, disable_web_page_preview=True)
-
-    except Exception as e:
-        print(f"Error in /allrepo: {e}")
-        await message.reply_text("⚠️ An error occurred while fetching repositories.")
-
-
-async def get_all_repository_info(username: str) -> str:
-    url = f"https://api.github.com/users/{username}/repos"
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.get(url)
-
-    if response.status_code != 200:
-        return None
-
-    data = response.json()
-    if not data:
-        return None
-
-    info_lines = [
-        f"🖇 **[{repo['name']}]({repo['html_url']})**\n"
-        f"⭐ Stars: `{repo['stargazers_count']}` | 🍴 Forks: `{repo['forks_count']}`\n"
-        f"📄 {repo['description'] or 'No description'}"
-        for repo in data
+async def show_repo(_, msg):
+    buttons = [
+        [InlineKeyboardButton("· ᴀᴅᴅ ᴍᴇ ʙᴀʙʏ ·", url=f"https://t.me/{BOT_USERNAME}?startgroup=true")],
+        [
+            InlineKeyboardButton("ɴꜰᴛ ɴᴇᴛᴡᴏʀᴋ", url="https://t.me/NightFarBots"),
+            InlineKeyboardButton("ʙᴜʏ ʀᴇᴩᴏ", url="https://t.me/KuttyHacker")
+        ]
     ]
 
-    profile_link = f"👤 [View GitHub Profile](https://github.com/{username})"
-    return f"{profile_link}\n\n" + "\n\n".join(info_lines)
+    reply_markup = InlineKeyboardMarkup(buttons)
+
+    try:  
+        await msg.reply_photo(
+            photo="https://i.ibb.co/mrHqmZ4Z/x.jpg",
+            caption=repo_caption,
+            reply_markup=reply_markup
+        )
+    except:
+        pass
