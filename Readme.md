@@ -110,3 +110,27 @@
       </tr>
     </table>
   </div>
+
+  <!-- ANIMATED FOOTER LINE -->
+  <p align="center">
+    <img src="https://user-images.githubusercontent.com/73097560/115834477-dbab4500-a447-11eb-908a-139a6edaec5c.gif" />
+  </p>
+
+    <div align="center">
+    <table>
+      <tr>
+        <td width="50%" valign="top">
+
+  ### 🚀 Advanced Performance
+
+  - ⚡ Telegram Bot Delvping 
+  - 🎧 Music Bot 
+  - 🔥 GitHub Code Editing And Modify 
+  - 🤖 24/7 Active Availability
+
+  </td>
+
+    <!-- ANIMATED FOOTER LINE -->
+  <p align="center">
+    <img src="https://user-images.githubusercontent.com/73097560/115834477-dbab4500-a447-11eb-908a-139a6edaec5c.gif" />
+  </p>
